@@ -37,12 +37,13 @@ function mountSelector(
 }
 
 describe('ComparisonSelector', () => {
-  it('is a segment of the comparisons, nothing chosen and a null range at first', () => {
+  it('is a segment of the comparisons, « Aucune » chosen and a null range at first', () => {
     const wrapper = mountSelector()
 
     const group = wrapper.get('[role="radiogroup"]')
     expect(wrapper.text()).toContain('Comparer avec')
     expect(group.findAll('[role="radio"]').map(o => o.text())).toEqual([
+      'Aucune',
       '3 mois',
       '6 mois',
       '12 mois',
@@ -50,7 +51,7 @@ describe('ComparisonSelector', () => {
     ])
     expect(
       group.findAll('[role="radio"]').map(o => o.attributes('aria-checked'))
-    ).toEqual(['false', 'false', 'false', 'false'])
+    ).toEqual(['true', 'false', 'false', 'false', 'false'])
     // The menu button is gone.
     expect(wrapper.find('[data-testid="comparison-trigger"]').exists()).toBe(
       false
@@ -168,5 +169,20 @@ describe('ComparisonSelector', () => {
       wrapper.find('[data-testid="comparison-custom-inverted"]').exists()
     ).toBe(true)
     expect(wrapper.emitted('update:range')?.at(-1)).toEqual([null])
+  })
+
+  it('takes the comparison off with « Aucune »', async () => {
+    const wrapper = mountSelector({ preset: '6m' })
+    expect(wrapper.emitted('update:range')?.at(-1)?.[0]).not.toBeNull()
+
+    await wrapper.get('[data-testid="comparison-option-none"]').trigger('click')
+    expect(wrapper.emitted('update:preset')).toEqual([['none']])
+    await wrapper.setProps({ preset: 'none' })
+    expect(wrapper.emitted('update:range')?.at(-1)).toEqual([null])
+    expect(
+      wrapper
+        .get('[data-testid="comparison-option-none"]')
+        .attributes('aria-checked')
+    ).toBe('true')
   })
 })

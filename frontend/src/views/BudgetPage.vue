@@ -277,8 +277,15 @@
     selectedMonth,
   })
 
-  /** Show the "Historique" column when a comparison range is selected. */
-  const showHistoricalColumn = computed(() => comparisonRange.value !== null)
+  /**
+   * Show the "Historique" column while editing with a comparison chosen.
+   * The comparison itself outlives edit mode (Richard, 2026-10-24): the
+   * chart draws its months in tracking too, but the history column,
+   * « Couvert », the margins and the sort by history stay planning tools.
+   */
+  const showHistoricalColumn = computed(
+    () => isEditing.value && comparisonRange.value !== null
+  )
   /**
    * Show the "Réel" column as soon as there is a month to read. Isolating the
    * running month counts: it carries real spending even though it would never
@@ -884,28 +891,31 @@
 
   /**
    * The ranges « Dépenses et enveloppe par mois » draws: the plan's, and
-   * the comparison's only while editing (lot 5) — following the plan, the
-   * chart reads the plan's months alone.
+   * the comparison's whenever one is chosen, in tracking as in editing
+   * (Richard, 2026-10-24, back to the chart before lot 5).
    */
   const chartRanges = computed(() => ({
     planStartMonth: plan.value?.startDate.slice(0, 7),
     planEndMonth: plan.value?.endDate.slice(0, 7),
-    comparisonStartMonth: isEditing.value
-      ? comparisonRange.value?.startMonth
-      : undefined,
-    comparisonEndMonth: isEditing.value
-      ? comparisonRange.value?.endMonth
-      : undefined,
+    comparisonStartMonth: comparisonRange.value?.startMonth,
+    comparisonEndMonth: comparisonRange.value?.endMonth,
   }))
 
-  /** The chart earns its fold at two columns, as the grid does. */
-  const showMonthlyChart = computed(
-    () =>
-      budgetChartMonths(statistics.value?.monthLabels ?? [], {
-        ...chartRanges.value,
-        currentMonth: currentYearMonth(),
-      }).length >= 2
+  /** The columns the chart would draw, in the statistics' order. */
+  const chartMonths = computed(() =>
+    budgetChartMonths(statistics.value?.monthLabels ?? [], {
+      ...chartRanges.value,
+      currentMonth: currentYearMonth(),
+    })
   )
+
+  /**
+   * The chart's card shows as soon as a month of the plan has begun: it
+   * carries « Comparer avec », which a one-month plan needs to draw a
+   * second column. The chart itself waits for two.
+   */
+  const showChartCard = computed(() => chartMonths.value.length >= 1)
+  const showMonthlyChart = computed(() => chartMonths.value.length >= 2)
 
   /**
    * « Dépenses et enveloppe par mois » is a native `details`, open on a
@@ -1192,13 +1202,19 @@
     isEditing.value = false
   }
 
-  /** « Choisir une comparaison »: « Comparer avec » brought to hand. */
+  /**
+   * « Choisir une comparaison »: « Comparer avec », on the chart's card,
+   * brought to hand — the card unfolded first on a phone.
+   */
   function chooseComparison(): void {
-    const slot = document.getElementById('budget-comparison')
-    slot?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
-    slot
-      ?.querySelector<HTMLElement>('[data-testid^="comparison-option-"]')
-      ?.focus({ preventScroll: true })
+    chartOpen.value = true
+    void nextTick(() => {
+      const slot = document.getElementById('budget-comparison')
+      slot?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      slot
+        ?.querySelector<HTMLElement>('[data-testid^="comparison-option-"]')
+        ?.focus({ preventScroll: true })
+    })
   }
 
   /**
@@ -1333,15 +1349,6 @@
       if (request === statisticsRequest) isRefreshingStatistics.value = false
     }
   }
-
-  // A comparison is a planning question: it only exists while the envelopes
-  // are being set. Leaving edit mode, by « Annuler », « Enregistrer » or a
-  // new plan, drops it, so the Historique column is never on in tracking.
-  watch(isEditing, editing => {
-    if (editing) return
-    comparisonPreset.value = 'none'
-    comparisonRange.value = null
-  })
 
   watch(
     [comparisonRange, deductReimbursements, deductPendingReimbursements],
@@ -1518,21 +1525,43 @@
         @edit="enterEditMode({ focusIncome: true })"
       />
 
-      <!-- Expense category list -->
-      <BaseCard bordered>
-        <BudgetTableControls
-          v-model:sort-order="sortOrder"
-          :editing="isEditing"
-          :plan-is-past="planStatus(plan) === 'past'"
-          :averages-source="averagesSource"
-          @enter-edit="enterEditMode()"
-          @apply-averages="applyAverageToAll"
-          @adjust-percent="adjustAllByPercent"
-          @reset="resetAllBudgets"
+      <!-- The months, before the envelopes (Richard, 2026-10-24): a card
+           open on a desk, folded below md as the dashboard's chart is,
+           drawn once open (Apex measures its box, a folded one is 0px).
+           « Comparer avec » lives here, in tracking as in editing: one
+           selector, one state, the past drawn in grey beside the plan. -->
+      <BaseCard
+        v-if="showChartCard && statistics?.monthLabels"
+        as="section"
+        bordered
+        padding="none"
+        class="mb-6"
+        data-testid="budget-chart-card"
+        aria-labelledby="budget-chart-title"
+      >
+        <details
+          data-testid="budget-chart-details"
+          class="group"
+          :open="chartOpen"
+          @toggle="onChartToggle"
         >
-          <!-- « Comparer avec »: in edit mode only, the envelopes being set
-               against a past. -->
-          <template v-if="isEditing" #comparison>
+          <summary
+            data-testid="budget-chart-toggle"
+            class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:px-6 [&::-webkit-details-marker]:hidden"
+          >
+            <h2
+              id="budget-chart-title"
+              class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+            >
+              Dépenses et enveloppe par mois
+            </h2>
+            <span
+              aria-hidden="true"
+              class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+              >▾</span
+            >
+          </summary>
+          <div v-if="chartOpen" class="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
             <ComparisonSelector
               id="budget-comparison"
               :plan="plan"
@@ -1545,7 +1574,43 @@
               @update:custom-end-date="comparisonCustomEnd = $event"
               @update:range="comparisonRange = $event"
             />
-          </template>
+            <MonthlyExpensesChart
+              v-if="showMonthlyChart"
+              :monthly-totals="monthlyTotalExpenses"
+              :month-labels="statistics.monthLabels"
+              :average-income="chartAverageIncome"
+              :total-budget="draftPlanTotal"
+              :plan-start-month="chartRanges.planStartMonth"
+              :plan-end-month="chartRanges.planEndMonth"
+              :comparison-start-month="chartRanges.comparisonStartMonth"
+              :comparison-end-month="chartRanges.comparisonEndMonth"
+              :current-month="currentYearMonth()"
+              @select-month="openMonthTransactions"
+            />
+            <p
+              v-else
+              data-testid="budget-chart-one-month"
+              class="text-xs text-gray-500 dark:text-gray-400"
+            >
+              Un seul mois à dessiner : choisissez une comparaison pour voir les
+              mois d’avant.
+            </p>
+          </div>
+        </details>
+      </BaseCard>
+
+      <!-- Expense category list -->
+      <BaseCard bordered>
+        <BudgetTableControls
+          v-model:sort-order="sortOrder"
+          :editing="isEditing"
+          :plan-is-past="planStatus(plan) === 'past'"
+          :averages-source="averagesSource"
+          @enter-edit="enterEditMode()"
+          @apply-averages="applyAverageToAll"
+          @adjust-percent="adjustAllByPercent"
+          @reset="resetAllBudgets"
+        >
         </BudgetTableControls>
 
         <!-- One grid for the whole table: the header and every row are
@@ -1661,7 +1726,8 @@
         </div>
 
         <!-- Under the envelopes, folded: the projects charged against the
-             reserve, then the smoothed purchases (everyday reading only). -->
+             reserve, the smoothed purchases (everyday reading only), then
+             the month-by-month grid. -->
         <div data-testid="budget-folded-lines" class="mt-2">
           <BudgetProjectsLine
             :projects="projects"
@@ -1673,47 +1739,6 @@
             :purchases="planSmoothedPurchases"
             :current-month="currentYearMonth()"
           />
-
-          <!-- The months, folded in place (lot 5), on the dashboard's
-               « Revenus et dépenses par mois »: the chart open on a desk,
-               folded below md, drawn once open (Apex measures its box, a
-               folded one is 0px); the comparison's months only while
-               editing. -->
-          <details
-            v-if="showMonthlyChart && statistics?.monthLabels"
-            data-testid="budget-chart-details"
-            class="group border-t border-gray-100 text-[13px] dark:border-slate-700"
-            :open="chartOpen"
-            @toggle="onChartToggle"
-          >
-            <summary
-              data-testid="budget-chart-toggle"
-              class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-4 px-4 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden"
-            >
-              <span class="font-semibold text-gray-900 dark:text-gray-100">
-                Dépenses et enveloppe par mois
-              </span>
-              <span
-                aria-hidden="true"
-                class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
-                >▾</span
-              >
-            </summary>
-            <div v-if="chartOpen" class="px-4 pb-4">
-              <MonthlyExpensesChart
-                :monthly-totals="monthlyTotalExpenses"
-                :month-labels="statistics.monthLabels"
-                :average-income="chartAverageIncome"
-                :total-budget="draftPlanTotal"
-                :plan-start-month="chartRanges.planStartMonth"
-                :plan-end-month="chartRanges.planEndMonth"
-                :comparison-start-month="chartRanges.comparisonStartMonth"
-                :comparison-end-month="chartRanges.comparisonEndMonth"
-                :current-month="currentYearMonth()"
-                @select-month="openMonthTransactions"
-              />
-            </div>
-          </details>
 
           <!-- Month by month, every envelope at once: folded everywhere,
                an occasional reading the rows already carry month by month. -->

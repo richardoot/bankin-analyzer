@@ -1,8 +1,8 @@
 /**
  * The months « Dépenses et enveloppe par mois » draws
  * (agent-os/product/budget-refonte.md, lot 5): the plan's started months,
- * and the comparison's only when one is set — that is, only while the
- * envelopes are being edited. A month still to come has nothing to draw,
+ * and the comparison's whenever one is chosen, in tracking as in editing
+ * (Richard, 2026-10-24). A month still to come has nothing to draw,
  * a month between the comparison and the plan belongs to neither.
  * Shared by the chart and by the page, which leaves the chart out when it
  * would draw fewer than two columns.

@@ -472,52 +472,52 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('mounts « Comparer avec » in edit mode only, and drops the comparison on leaving it', async () => {
+    it('mounts one « Comparer avec », on the chart’s card, and keeps the Historique column for edit mode', async () => {
       const wrapper = mount(BudgetPage, { attachTo: document.body })
       await flushPromises()
+      const header = () =>
+        wrapper.get('[data-testid="budget-table-header"]').text()
 
-      // Tracking: no selector, no menu button of the old dropdown.
-      expect(wrapper.find('[data-testid="comparison-selector"]').exists()).toBe(
-        false
+      // Tracking: the selector on the chart's card, « Aucune » chosen; no
+      // menu button of the old dropdown.
+      const card = wrapper.get('[data-testid="budget-chart-card"]')
+      expect(card.findAll('[data-testid="comparison-selector"]')).toHaveLength(
+        1
       )
+      expect(
+        card
+          .get('[data-testid="comparison-option-none"]')
+          .attributes('aria-checked')
+      ).toBe('true')
       expect(wrapper.find('[data-testid="comparison-trigger"]').exists()).toBe(
         false
       )
 
-      await compareWith(wrapper, '3m')
-      const header = () =>
-        wrapper.get('[data-testid="budget-table-header"]').text()
-      // In the table's own header, the Historique column with it.
+      // A comparison chosen in tracking: still no Historique column.
+      await card.get('[data-testid="comparison-option-3m"]').trigger('click')
+      await flushPromises()
+      expect(header()).not.toContain('Historique')
+
+      // Editing: the same selector, the same choice, the column on.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
       expect(
-        wrapper
-          .get('[data-testid="budget-table"]')
-          .element.parentElement?.querySelector(
-            '[data-testid="comparison-selector"]'
-          )
-      ).not.toBeNull()
+        wrapper.findAll('[data-testid="comparison-selector"]')
+      ).toHaveLength(1)
       expect(header()).toContain('Historique')
 
       vi.mocked(api.getBudgetStatistics).mockClear()
       await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
       await flushPromises()
 
-      expect(wrapper.find('[data-testid="comparison-selector"]').exists()).toBe(
-        false
-      )
+      // Out of edit mode: the column goes, the comparison stays — no
+      // refetch back to the plan's own months.
       expect(header()).not.toContain('Historique')
-      // Back to the plan's own months.
-      expect(api.getBudgetStatistics).toHaveBeenLastCalledWith(
-        expect.objectContaining({ startDate: '2026-05-01' })
-      )
-
-      // A new edit starts without a comparison.
-      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
       expect(
         wrapper
           .get('[data-testid="comparison-option-3m"]')
           .attributes('aria-checked')
-      ).toBe('false')
-      expect(header()).not.toContain('Historique')
+      ).toBe('true')
+      expect(api.getBudgetStatistics).not.toHaveBeenCalled()
       wrapper.unmount()
     })
 
@@ -1753,7 +1753,7 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    describe('the chart and the grid, folded under the envelopes', () => {
+    describe('the chart before the envelopes, the grid folded under them', () => {
       const originalMatchMedia = window.matchMedia
 
       function stubWidth(belowMd: boolean): void {
@@ -1779,7 +1779,7 @@ describe('BudgetPage', () => {
       const detailsOf = (w: ReturnType<typeof mount>, id: string) =>
         w.get(`[data-testid="${id}"]`).element as HTMLDetailsElement
 
-      it('sets the two details after the projects and smoothed lines', async () => {
+      it('sets the chart in its card between the band and the envelopes, the grid last of the folded lines', async () => {
         const wrapper = mount(BudgetPage)
         await flushPromises()
 
@@ -1787,10 +1787,10 @@ describe('BudgetPage', () => {
         const ids = [...folded.element.children].map(el =>
           el.getAttribute('data-testid')
         )
-        expect(ids.slice(-2)).toEqual([
-          'budget-chart-details',
-          'budget-matrix-details',
-        ])
+        expect(ids.at(-1)).toBe('budget-matrix-details')
+        expect(ids).not.toContain('budget-chart-details')
+        const card = wrapper.get('[data-testid="budget-chart-card"]')
+        expect(card.element.tagName).toBe('SECTION')
         expect(detailsOf(wrapper, 'budget-chart-details').tagName).toBe(
           'DETAILS'
         )
@@ -1800,15 +1800,13 @@ describe('BudgetPage', () => {
         expect(
           wrapper.get('[data-testid="budget-matrix-toggle"]').text()
         ).toContain('Mois par mois')
-        // Nothing of the months above the list any more.
+        const follows = (a: Element, b: Element) =>
+          (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !==
+          0
+        const band = wrapper.get('[data-testid="budget-month-band"]').element
         const table = wrapper.get('[data-testid="budget-table"]').element
-        const chart = wrapper.get(
-          '[data-testid="budget-chart-details"]'
-        ).element
-        expect(
-          table.compareDocumentPosition(chart) &
-            Node.DOCUMENT_POSITION_FOLLOWING
-        ).toBeTruthy()
+        expect(follows(band, card.element)).toBe(true)
+        expect(follows(card.element, table)).toBe(true)
         wrapper.unmount()
       })
 
@@ -1867,7 +1865,7 @@ describe('BudgetPage', () => {
         wrapper.unmount()
       })
 
-      it('hands the chart the comparison only while editing', async () => {
+      it('hands the chart the comparison chosen in tracking, and keeps it out of edit mode', async () => {
         const wrapper = mount(BudgetPage)
         await flushPromises()
 
@@ -1875,28 +1873,54 @@ describe('BudgetPage', () => {
           wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
         expect(chartProps().planStartMonth).toBe('2026-06')
         expect(chartProps().comparisonStartMonth).toBeUndefined()
-        expect(chartProps().comparisonEndMonth).toBeUndefined()
 
-        await compareWith(wrapper, '3m')
-        expect(chartProps().comparisonStartMonth).toBeTruthy()
-        expect(chartProps().comparisonEndMonth).toBeTruthy()
+        // « Comparer avec » on the chart's card, without editing.
+        const card = wrapper.get('[data-testid="budget-chart-card"]')
+        await card.get('[data-testid="comparison-option-3m"]').trigger('click')
+        await flushPromises()
+        expect(chartProps().comparisonStartMonth).toBe('2026-03')
+        expect(chartProps().comparisonEndMonth).toBe('2026-05')
 
+        // In and out of edit mode: the choice stays.
+        await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
         await wrapper
           .get('[data-testid="budget-cancel-button"]')
+          .trigger('click')
+        await flushPromises()
+        expect(chartProps().comparisonStartMonth).toBe('2026-03')
+        expect(
+          card
+            .get('[data-testid="comparison-option-3m"]')
+            .attributes('aria-checked')
+        ).toBe('true')
+
+        // « Aucune » takes it off.
+        await card
+          .get('[data-testid="comparison-option-none"]')
           .trigger('click')
         await flushPromises()
         expect(chartProps().comparisonStartMonth).toBeUndefined()
         wrapper.unmount()
       })
 
-      it('leaves both out on a plan with a single started month', async () => {
+      it('keeps the chart’s card for its selector on a plan with a single started month', async () => {
         vi.setSystemTime(new Date('2026-06-10T12:00:00Z'))
         const wrapper = mount(BudgetPage)
         await flushPromises()
 
+        // One column is no chart, but « Comparer avec » can draw a second.
+        expect(wrapper.find('[data-testid="budget-chart-card"]').exists()).toBe(
+          true
+        )
         expect(
-          wrapper.find('[data-testid="budget-chart-details"]').exists()
+          wrapper.find('[data-testid="comparison-selector"]').exists()
+        ).toBe(true)
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
         ).toBe(false)
+        expect(
+          wrapper.find('[data-testid="budget-chart-one-month"]').exists()
+        ).toBe(true)
         expect(
           wrapper.find('[data-testid="budget-matrix-details"]').exists()
         ).toBe(false)
@@ -2753,14 +2777,16 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      // Tracking: no comparison, no Historique column.
+      // Tracking: no comparison chosen, no Historique column.
       const grid = () =>
         (
           wrapper.get('[data-testid="budget-table"]').element as HTMLElement
         ).style.getPropertyValue('--row-grid')
-      expect(wrapper.find('[data-testid="comparison-selector"]').exists()).toBe(
-        false
-      )
+      expect(
+        wrapper
+          .get('[data-testid="comparison-option-none"]')
+          .attributes('aria-checked')
+      ).toBe('true')
       expect(grid()).toBe('1fr auto auto auto')
       expect(
         wrapper.get('[data-testid="budget-table-header"]').text()

@@ -11,10 +11,11 @@
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
 
   /**
-   * « Comparer avec »: the past the envelopes are set against. A segment of
-   * its few choices, mounted by the page in edit mode only — a comparison is
-   * a planning question, not a tracking one. The resolved range leaves as
-   * `update:range`; the preset and the dates stay with the page.
+   * « Comparer avec »: the past the plan is set against. A segment of its
+   * few choices, mounted by the page on the chart's card, in tracking as in
+   * editing: the chart draws the comparison's months in grey, the history
+   * column of the envelopes waits for edit mode. The resolved range leaves
+   * as `update:range`; the preset and the dates stay with the page.
    */
   const props = defineProps<{
     plan: BudgetPlanDto | null
@@ -149,13 +150,15 @@
   )
 
   /**
-   * The choices, all visible: the months right before the plan, the same
-   * months a year earlier when they hold any data, or two dates. « None »
-   * is not offered: the selector only shows while the envelopes are being
-   * set, and leaving the edit mode drops the comparison.
+   * The choices, all visible: none, the months right before the plan, the
+   * same months a year earlier when they hold any data, or two dates.
+   * « Aucune » comes first: the selector sits on the chart's card in
+   * tracking as in editing, and the comparison chosen outlives edit mode
+   * (Richard, 2026-10-24), so it must be possible to take it off.
    */
   const options = computed<SegmentedOption<ComparisonPreset>[]>(() => {
     const base: SegmentedOption<ComparisonPreset>[] = [
+      { value: 'none', label: 'Aucune', title: 'Le plan seul' },
       { value: '3m', label: '3 mois', title: 'Les 3 mois avant le plan' },
       { value: '6m', label: '6 mois', title: 'Les 6 mois avant le plan' },
       { value: '12m', label: '12 mois', title: 'Les 12 mois avant le plan' },
