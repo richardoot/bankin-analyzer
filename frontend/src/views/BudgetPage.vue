@@ -500,6 +500,27 @@
   })
 
   /**
+   * The events' part of each month, summed over the categories, aligned
+   * with the statistics' months: hatched on the chart's plan columns in
+   * the real reading only, as the dashboard's chart does. « Vie courante »
+   * leaves the events out of the columns, so there is nothing to hatch.
+   */
+  const monthlyExceptionalTotals = computed<number[] | undefined>(() => {
+    if (breakdownMode.value !== 'real') return undefined
+    const totals: number[] = new Array(
+      statistics.value?.monthLabels?.length ?? 0
+    ).fill(0)
+    for (const cat of visibleExpenseCategories.value) {
+      const events = comparison.exceptionalSeriesFor(cat)
+      if (!events) continue
+      for (let i = 0; i < totals.length; i++) {
+        totals[i] = (totals[i] ?? 0) + (events[i] ?? 0)
+      }
+    }
+    return totals.map(v => Math.round(v * 100) / 100)
+  })
+
+  /**
    * True when at least one visible category carries exceptional spending in
    * a started plan month — drives whether the mode selector is offered. Not
    * the month read: the running month without an event must not hide a
@@ -1580,6 +1601,7 @@
               :month-labels="statistics.monthLabels"
               :average-income="chartAverageIncome"
               :total-budget="draftPlanTotal"
+              :exceptional-totals="monthlyExceptionalTotals"
               :plan-start-month="chartRanges.planStartMonth"
               :plan-end-month="chartRanges.planEndMonth"
               :comparison-start-month="chartRanges.comparisonStartMonth"

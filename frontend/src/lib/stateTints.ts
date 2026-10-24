@@ -33,6 +33,15 @@ export const STATE_COLORS: Readonly<Record<StateTone, string>> = {
 export const DATA_HUE = '#60a5fa'
 
 /**
+ * The income line of the Budget's « Dépenses et enveloppe par mois »:
+ * green-600, legible on a light and a dark ground. Richard's decision of
+ * 2026-10-24, an exception to the rule « no green on a figure »: a line of
+ * reference, not a figure, told apart from the envelope (amber, dashed)
+ * and the columns (`DATA_HUE`).
+ */
+export const INCOME_LINE_COLOR = '#16a34a'
+
+/**
  * A gap to a reference, as a share of it: `under` below it, `over` above
  * it, `neutral` within ±5 % (`DASHBOARD_THRESHOLDS.neutralGap`) or when
  * there is no reference to compare with. Shared by « Ce mois-ci » on the

@@ -1903,6 +1903,47 @@ describe('BudgetPage', () => {
         wrapper.unmount()
       })
 
+      it('hands the chart the events of each month in « Tout » only', async () => {
+        vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+          ...sampleStatistics,
+          periodMonths: 7,
+          monthLabels: [
+            '2026-06',
+            '2026-07',
+            '2026-08',
+            '2026-09',
+            '2026-10',
+            '2026-11',
+            '2026-12',
+          ],
+          expensesByCategory: [
+            {
+              categoryId: 'cat-food',
+              categoryName: 'Alimentation',
+              categoryIcon: '🍽️',
+              totalAmount: 900,
+              transactionCount: 12,
+              averagePerMonth: 128,
+              monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+              // June held a 300 € holiday.
+              everydayMonthlyAmounts: [200, 200, 200, 0, 0, 0, 0],
+            },
+          ],
+        })
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+        const chartProps = () =>
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
+
+        // « Vie courante »: the events are out of the columns.
+        expect(chartProps().exceptionalTotals).toBeUndefined()
+
+        await readAll(wrapper)
+        expect(chartProps().exceptionalTotals).toEqual([300, 0, 0, 0, 0, 0, 0])
+        expect(chartProps().monthlyTotals?.[0]).toBe(500)
+        wrapper.unmount()
+      })
+
       it('keeps the chart’s card for its selector on a plan with a single started month', async () => {
         vi.setSystemTime(new Date('2026-06-10T12:00:00Z'))
         const wrapper = mount(BudgetPage)

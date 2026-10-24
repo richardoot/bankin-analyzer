@@ -3,11 +3,13 @@
    * « Dépenses et enveloppe par mois » (agent-os/product/budget-refonte.md,
    * lot 5), drawn to the dashboard's chart (`IncomeExpensesChart`): the
    * plan's started months in columns of the one data hue, the current
-   * month lighter, the comparison's months in light grey — and only while
-   * the envelopes are edited, the page passing no comparison otherwise.
-   * The total envelope dashed and the income solid, both in the text's
-   * ink. The legend names only what is drawn; the tooltip says the gap to
-   * the envelope in words, without a colour.
+   * month lighter, the comparison's months in light grey whenever one is
+   * chosen. Read « Tout », each plan month stacks its events hatched on
+   * the rest, in the same hue, as the dashboard's `IncomeExpensesChart`
+   * does. The income solid in green and the total envelope dashed in
+   * amber (Richard, 2026-10-24): the threshold the columns are weighed
+   * against, in the hue of an overrun. The legend names only what is
+   * drawn; the tooltip says the gap to the envelope in words.
    */
   import { computed } from 'vue'
   import VueApexCharts from 'vue3-apexcharts/core'
@@ -20,7 +22,7 @@
     formatMonth,
   } from '@/lib/formatters'
   import { useIsMobile } from '@/composables/useMediaQuery'
-  import { DATA_HUE } from '@/lib/stateTints'
+  import { DATA_HUE, INCOME_LINE_COLOR, STATE_COLORS } from '@/lib/stateTints'
   import { budgetChartMonths, thisYearMonth } from '@/lib/budgetChartMonths'
 
   const props = defineProps<{
@@ -28,17 +30,23 @@
     monthlyTotals: number[]
     /** Month labels like ['2025-04', '2025-05', ...] */
     monthLabels: string[]
-    /** Average monthly income — the solid ink line. */
+    /** Average monthly income — the solid green line. */
     averageIncome: number
-    /** Total envelope — the dashed ink line. */
+    /** Total envelope — the dashed amber line. */
     totalBudget: number
+    /**
+     * The events' share of each month, aligned with `monthLabels`: hatched
+     * on top of the plan's columns. The page passes it in the real reading
+     * only — « Vie courante » leaves the events out of the columns.
+     */
+    exceptionalTotals?: number[] | undefined
     /** First month covered by the budget plan (YYYY-MM). */
     planStartMonth?: string | undefined
     /** Last month covered by the budget plan (YYYY-MM). */
     planEndMonth?: string | undefined
-    /** First month of the comparison range (YYYY-MM), editing only. */
+    /** First month of the comparison range (YYYY-MM), when one is chosen. */
     comparisonStartMonth?: string | undefined
-    /** Last month of the comparison range (YYYY-MM), editing only. */
+    /** Last month of the comparison range (YYYY-MM), when one is chosen. */
     comparisonEndMonth?: string | undefined
     /** The month still running, drawn lighter. Defaults to today's. */
     currentMonth?: string | undefined
@@ -77,8 +85,31 @@
     months.value.map(m => props.monthlyTotals[m.index] ?? 0)
   )
 
-  const displayLabels = computed(() =>
-    months.value.map(m => formatMonth(m.ym, { year: false }))
+  const roundCents = (value: number) => Math.round(value * 100) / 100
+
+  /**
+   * Each drawn month's events, never below zero: the plan's months only,
+   * the comparison's columns staying one grey block.
+   */
+  const events = computed(() =>
+    months.value.map(m =>
+      m.kind === 'plan'
+        ? Math.max(0, roundCents(props.exceptionalTotals?.[m.index] ?? 0))
+        : 0
+    )
+  )
+
+  /** Hatched only when the reading passes the events and a month has some. */
+  const hasEvents = computed(() => events.value.some(v => v > 0))
+
+  /**
+   * A month under its events: the total less them, so the stack adds up
+   * to the total. Never below zero.
+   */
+  const rests = computed(() =>
+    totals.value.map((total, i) =>
+      Math.max(0, roundCents(total - (events.value[i] ?? 0)))
+    )
   )
 
   const hasComparison = computed(() =>
@@ -100,6 +131,10 @@
   )
 
   const inkColor = computed(() => donutValueColor.value)
+  /** The income, solid: green, Richard's exception of 2026-10-24. */
+  const INCOME_COLOR = INCOME_LINE_COLOR
+  /** The envelope, dashed: the amber of an overrun, the threshold it is. */
+  const BUDGET_COLOR = STATE_COLORS.over
 
   // On a ~340px plot the full « Revenus 3 456,78 € » labels overlapped the
   // bars and each other; a phone gets « Rev. 3,5 k€ » on the left.
@@ -113,11 +148,13 @@
   function referenceLine(
     y: number,
     text: string,
-    dashed: boolean
+    dashed: boolean,
+    color: string
   ): YAnnotation {
     return {
       y,
-      borderColor: inkColor.value,
+      borderColor: color,
+      borderWidth: 2,
       strokeDashArray: dashed ? 4 : 0,
       label: {
         text,
@@ -145,7 +182,8 @@
           isMobile.value
             ? `Rev. ${compact(props.averageIncome)}`
             : `Revenus ${formatCurrency(props.averageIncome)}`,
-          false
+          false,
+          INCOME_COLOR
         )
       )
     }
@@ -156,7 +194,8 @@
           isMobile.value
             ? `Env. ${compact(props.totalBudget)}`
             : `Enveloppe ${formatCurrency(props.totalBudget)}`,
-          true
+          true,
+          BUDGET_COLOR
         )
       )
     }
@@ -200,6 +239,10 @@
           ? `${name} · comparaison`
           : name
     const rows = [line('Dépenses', formatCurrency(value))]
+    const monthEvents = events.value[index] ?? 0
+    if (monthEvents > 0) {
+      rows.push(line('dont événements', formatCurrency(monthEvents)))
+    }
     const gap = envelopeGap(value)
     if (gap) rows.push(line('Enveloppe', gap))
     if (props.averageIncome > 0) {
@@ -214,6 +257,7 @@
   const chartOptions = computed<ApexOptions>(() => ({
     chart: {
       type: 'bar',
+      stacked: true,
       toolbar: { show: false },
       fontFamily: 'inherit',
       background: 'transparent',
@@ -238,16 +282,22 @@
       bar: {
         borderRadius: 4,
         borderRadiusApplication: 'end',
+        borderRadiusWhenStacked: 'last',
         // Wider bars on a phone: each one opens its month.
         columnWidth: isMobile.value ? '75%' : '60%',
-        distributed: true,
       },
     },
     dataLabels: { enabled: false },
     legend: { show: false },
     xaxis: {
-      categories: displayLabels.value,
+      type: 'category',
       labels: {
+        // A point's x is its `YYYY-MM`, unique across years: two Mays of a
+        // twelve-month comparison stay two columns. Shown short.
+        formatter: (value: string) =>
+          typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
+            ? formatMonth(value, { year: false })
+            : String(value ?? ''),
         rotate: -45,
         rotateAlways: isMobile.value,
         hideOverlappingLabels: true,
@@ -275,7 +325,19 @@
       borderColor: chartTheme.value.grid?.borderColor ?? '#e5e7eb',
       strokeDashArray: 4,
     },
-    colors: barColors.value,
+    // Each column carries its own colour (`fillColor`); the series colour
+    // is the hatching's, the one data hue.
+    colors: hasEvents.value ? [BAR_COLOR, BAR_COLOR] : [BAR_COLOR],
+    fill: {
+      type: hasEvents.value ? ['solid', 'pattern'] : ['solid'],
+      opacity: 1,
+      pattern: {
+        style: 'slantedLines',
+        width: 6,
+        height: 6,
+        strokeWidth: 2,
+      },
+    },
     annotations: { yaxis: yAnnotations.value },
     tooltip: {
       theme: isDark.value ? 'dark' : 'light',
@@ -284,7 +346,38 @@
     },
   }))
 
-  const series = computed(() => [{ name: 'Dépenses', data: totals.value }])
+  /** A column's point, in the colour of its month. */
+  const point = (i: number, y: number) => ({
+    x: months.value[i]?.ym ?? '',
+    y,
+    fillColor: barColors.value[i] ?? BAR_COLOR,
+  })
+
+  const series = computed<NonNullable<ApexOptions['series']>>(() =>
+    hasEvents.value
+      ? [
+          {
+            name: 'Dépenses',
+            data: rests.value.map((y, i) => point(i, y)),
+          },
+          {
+            name: 'événements',
+            data: events.value.map((y, i) => point(i, y)),
+          },
+        ]
+      : [
+          {
+            name: 'Dépenses',
+            data: totals.value.map((y, i) => point(i, y)),
+          },
+        ]
+  )
+
+  /** The legend's hatched marker: the hue's stripes, as Apex draws them. */
+  const hatchedMarker = {
+    backgroundImage: `repeating-linear-gradient(-45deg, ${BAR_COLOR} 0 1.5px, transparent 1.5px 4px)`,
+    borderColor: BAR_COLOR,
+  }
 </script>
 
 <template>
@@ -305,6 +398,19 @@
           :style="{ backgroundColor: BAR_COLOR }"
         />
         Dépenses
+      </span>
+      <span
+        v-if="hasEvents"
+        class="inline-flex items-center gap-1.5"
+        data-testid="legend-events"
+      >
+        <span
+          aria-hidden="true"
+          data-testid="legend-events-swatch"
+          class="inline-block h-2.5 w-3 rounded-sm border"
+          :style="hatchedMarker"
+        />
+        dont événements
       </span>
       <span
         v-if="hasCurrentMonth"
@@ -332,7 +438,7 @@
           aria-hidden="true"
           class="inline-block w-3 border-t-2"
           data-testid="legend-income-swatch"
-          :style="{ borderColor: inkColor }"
+          :style="{ borderColor: INCOME_COLOR }"
         />
         Revenus
       </span>
@@ -341,7 +447,7 @@
           aria-hidden="true"
           class="inline-block w-3 border-t-2 border-dashed"
           data-testid="legend-budget-swatch"
-          :style="{ borderColor: inkColor }"
+          :style="{ borderColor: BUDGET_COLOR }"
         />
         Enveloppe
       </span>

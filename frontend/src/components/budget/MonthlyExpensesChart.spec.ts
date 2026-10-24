@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MonthlyExpensesChart from './MonthlyExpensesChart.vue'
-import { DATA_HUE } from '@/lib/stateTints'
+import { DATA_HUE, INCOME_LINE_COLOR, STATE_COLORS } from '@/lib/stateTints'
 import { budgetChartMonths } from '@/lib/budgetChartMonths'
 
 // Mock vue3-apexcharts — capture options and series for assertions
@@ -39,11 +39,31 @@ type Wrapper = ReturnType<typeof mount>
 function chartOf(wrapper: Wrapper) {
   return wrapper.findComponent({ name: 'VueApexCharts' })
 }
-function colorsOf(wrapper: Wrapper): string[] {
-  return chartOf(wrapper).props('options').colors as string[]
+interface Point {
+  x: string
+  y: number
+  fillColor: string
 }
+interface Series {
+  name: string
+  data: Point[]
+}
+function seriesOf(wrapper: Wrapper): Series[] {
+  return chartOf(wrapper).props('series') as Series[]
+}
+function pointsOf(wrapper: Wrapper, index = 0): Point[] {
+  return seriesOf(wrapper)[index]?.data ?? []
+}
+/** Each column's colour, carried by its point. */
+function colorsOf(wrapper: Wrapper): string[] {
+  return pointsOf(wrapper).map(p => p.fillColor)
+}
+/** The axis labels, as the formatter shows each point's month. */
 function categoriesOf(wrapper: Wrapper): string[] {
-  return chartOf(wrapper).props('options').xaxis.categories as string[]
+  const format = chartOf(wrapper).props('options').xaxis.labels.formatter as (
+    value: string
+  ) => string
+  return pointsOf(wrapper).map(p => format(p.x))
 }
 interface Line {
   y: number
@@ -105,8 +125,13 @@ describe('MonthlyExpensesChart', () => {
     it('draws the plan’s started months only', () => {
       const wrapper = mount(MonthlyExpensesChart, { props: defaultProps })
       expect(categoriesOf(wrapper)).toEqual(['Févr.', 'Mars', 'Avr.'])
-      expect(chartOf(wrapper).props('series')).toEqual([
-        { name: 'Dépenses', data: [1800, 2600, 2400] },
+      expect(seriesOf(wrapper).map(s => s.name)).toEqual(['Dépenses'])
+      expect(pointsOf(wrapper).map(p => p.y)).toEqual([1800, 2600, 2400])
+      // Each point's x is its month: two Mays of two years stay apart.
+      expect(pointsOf(wrapper).map(p => p.x)).toEqual([
+        '2026-02',
+        '2026-03',
+        '2026-04',
       ])
     })
 
@@ -155,7 +180,7 @@ describe('MonthlyExpensesChart', () => {
     })
   })
 
-  describe('with a comparison (editing)', () => {
+  describe('with a comparison (tracking or editing)', () => {
     it('adds the comparison months in light grey before the plan', () => {
       const wrapper = mount(MonthlyExpensesChart, { props: withComparison })
       expect(categoriesOf(wrapper)).toEqual([
@@ -201,15 +226,17 @@ describe('MonthlyExpensesChart', () => {
   })
 
   describe('the two reference lines', () => {
-    it('draws the envelope dashed and the income solid, both in ink', () => {
+    it('draws the income solid in green and the envelope dashed in amber, the labels in ink', () => {
       const wrapper = mount(MonthlyExpensesChart, { props: defaultProps })
       const lines = linesOf(wrapper)
       const income = lines.find(l => l.y === 4200)
       const envelope = lines.find(l => l.y === 2500)
-      expect(income?.borderColor).toBe(INK)
+      expect(INCOME_LINE_COLOR).toBe('#16a34a')
+      expect(income?.borderColor).toBe(INCOME_LINE_COLOR)
       expect(income?.strokeDashArray).toBe(0)
       expect(income?.label.text).toContain('Revenus')
-      expect(envelope?.borderColor).toBe(INK)
+      expect(income?.label.style.color).toBe(INK)
+      expect(envelope?.borderColor).toBe(STATE_COLORS.over)
       expect(envelope?.strokeDashArray).toBe(4)
       expect(envelope?.label.text).toContain('Enveloppe')
       expect(envelope?.label.style.color).toBe(INK)
@@ -223,6 +250,15 @@ describe('MonthlyExpensesChart', () => {
       expect(both.find('[data-testid="legend-budget-swatch"]').exists()).toBe(
         true
       )
+      // In the colours of their lines.
+      expect(
+        both.get('[data-testid="legend-income-swatch"]').attributes('style')
+      ).toMatch(/border-color: (#16a34a|rgb\(22, 163, 74\))/)
+      const budget = both.get('[data-testid="legend-budget-swatch"]')
+      expect(budget.attributes('style')).toMatch(
+        /border-color: (#f59e0b|rgb\(245, 158, 11\))/
+      )
+      expect(budget.classes()).toContain('border-dashed')
 
       const none = mount(MonthlyExpensesChart, {
         props: { ...defaultProps, averageIncome: 0, totalBudget: 0 },
@@ -254,6 +290,66 @@ describe('MonthlyExpensesChart', () => {
     it('marks the current month', () => {
       const wrapper = mount(MonthlyExpensesChart, { props: defaultProps })
       expect(tooltipOf(wrapper, 2)).toContain('Avril 2026 · en cours')
+    })
+  })
+
+  describe('the events, hatched in the real reading', () => {
+    // March and April carry 600 € and 200 € of events; November, a
+    // comparison month, 300 € that stay in its grey block.
+    const exceptionalTotals = [300, 0, 0, 0, 600, 200, 0, 0]
+
+    it('stacks each plan month’s events hatched on the rest of the month', () => {
+      const wrapper = mount(MonthlyExpensesChart, {
+        props: { ...withComparison, exceptionalTotals },
+      })
+      expect(seriesOf(wrapper).map(s => s.name)).toEqual([
+        'Dépenses',
+        'événements',
+      ])
+      // The rest and the events add up to the month.
+      expect(pointsOf(wrapper, 0).map(p => p.y)).toEqual([
+        2500, 2300, 2700, 1800, 2000, 2200,
+      ])
+      expect(pointsOf(wrapper, 1).map(p => p.y)).toEqual([0, 0, 0, 0, 600, 200])
+      // The events in the same colour as their column.
+      expect(pointsOf(wrapper, 1).map(p => p.fillColor)).toEqual(
+        colorsOf(wrapper)
+      )
+      const options = chartOf(wrapper).props('options')
+      expect(options.chart.stacked).toBe(true)
+      expect(options.fill.type).toEqual(['solid', 'pattern'])
+      expect(options.fill.pattern.style).toBe('slantedLines')
+    })
+
+    it('says « dont événements » in the tooltip and the legend', () => {
+      const wrapper = mount(MonthlyExpensesChart, {
+        props: { ...defaultProps, exceptionalTotals },
+      })
+      // March: 2 600 € of which 600 € of events.
+      const march = tooltipOf(wrapper, 1)
+      expect(march).toContain('Dépenses')
+      expect(march).toContain('2600.00 €')
+      expect(march).toContain('dont événements')
+      expect(march).toContain('600.00 €')
+      expect(tooltipOf(wrapper, 0)).not.toContain('dont événements')
+      const legend = wrapper.get('[data-testid="legend-events"]')
+      expect(legend.text()).toBe('dont événements')
+      expect(
+        legend.get('[data-testid="legend-events-swatch"]').attributes('style')
+      ).toContain('repeating-linear-gradient')
+    })
+
+    it('draws one solid series without events to hatch', () => {
+      for (const totals of [undefined, [0, 0, 0, 0, 0, 0, 0, 0]]) {
+        const wrapper = mount(MonthlyExpensesChart, {
+          props: { ...defaultProps, exceptionalTotals: totals },
+        })
+        expect(seriesOf(wrapper)).toHaveLength(1)
+        expect(chartOf(wrapper).props('options').fill.type).toEqual(['solid'])
+        expect(wrapper.find('[data-testid="legend-events"]').exists()).toBe(
+          false
+        )
+      }
     })
   })
 
