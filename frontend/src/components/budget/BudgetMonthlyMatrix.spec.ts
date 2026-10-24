@@ -122,7 +122,9 @@ describe('BudgetMonthlyMatrix', () => {
     const header = wrapper.find('[data-testid="matrix-header-2026-08"]')
     expect(header.element.tagName).not.toBe('BUTTON')
     expect(header.attributes('aria-current')).toBe('true')
-    expect(header.classes().join(' ')).toContain('bg-primary-600')
+    // The month read is grey, as on the charts: no primary, no amber.
+    expect(header.classes().join(' ')).toContain('bg-gray-200')
+    expect(header.html()).not.toMatch(/primary|amber/)
     expect(
       wrapper
         .find('[data-testid="matrix-header-2026-06"]')

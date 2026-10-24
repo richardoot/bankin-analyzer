@@ -44,8 +44,9 @@
     if (s === 'current')
       return {
         label: 'En cours',
-        class:
-          'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400',
+        // A status, not an action: the ink, as the plan's name (primary is
+        // for what can be pressed or chosen).
+        class: 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100',
       }
     if (s === 'future')
       return {

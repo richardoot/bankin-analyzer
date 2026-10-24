@@ -469,7 +469,7 @@
               :class="
                 dirty
                   ? 'border-primary-500 dark:border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                  : 'border-primary-300 dark:border-primary-800'
+                  : 'border-gray-300 dark:border-slate-600'
               "
               @input="
                 emit('update-budget', ($event.target as HTMLInputElement).value)
@@ -750,7 +750,7 @@
               }}
               <span
                 v-if="readsEveryday(sub) && (sub.amortizedAmount ?? 0) > 0.005"
-                class="block text-[10px] font-normal text-teal-700 dark:text-teal-400"
+                class="block text-[10px] font-normal text-gray-500 dark:text-gray-400"
               >
                 dont {{ formatCurrency(sub.amortizedAmount ?? 0) }} lissés
               </span>

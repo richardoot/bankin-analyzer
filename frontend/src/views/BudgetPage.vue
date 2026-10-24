@@ -1451,14 +1451,10 @@
       réglages précédents. {{ statisticsError }}
     </InlineAlert>
 
-    <!-- Error banner -->
-    <div
-      v-if="error"
-      role="alert"
-      class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm"
-    >
+    <!-- A load that failed: the page's error alert, red as errors are. -->
+    <InlineAlert v-if="error" class="mb-6" data-testid="budget-error">
       {{ error }}
-    </div>
+    </InlineAlert>
 
     <!-- Initial loading -->
     <div v-if="isLoading" class="flex justify-center items-center py-20">

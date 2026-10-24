@@ -195,13 +195,16 @@
                 class="inline-block text-xs font-semibold uppercase tracking-wide rounded px-1.5 py-0.5"
                 :class="
                   selectedMonth === month.ym
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-gray-200 text-gray-900 dark:bg-slate-700 dark:text-gray-100'
                     : 'text-gray-500 dark:text-gray-400'
                 "
                 :aria-current="selectedMonth === month.ym ? 'true' : undefined"
               >
                 {{ month.label }}
-                <span v-if="month.isRunning" class="text-amber-500">●</span>
+                <template v-if="month.isRunning">
+                  <span class="opacity-70" aria-hidden="true">•</span>
+                  <span class="sr-only">, en cours</span>
+                </template>
               </span>
             </th>
           </tr>

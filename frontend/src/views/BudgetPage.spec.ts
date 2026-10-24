@@ -233,6 +233,18 @@ describe('BudgetPage', () => {
       expect(api.getBudgetStatistics).not.toHaveBeenCalled()
     })
 
+    it('says a failed load in the page’s error alert, not a hand-made red box', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockRejectedValue(new Error('boom'))
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const alert = wrapper.get('[data-testid="budget-error"]')
+      expect(alert.attributes('role')).toBe('alert')
+      expect(alert.text()).toContain('boom')
+      expect(wrapper.findComponent({ name: 'InlineAlert' }).exists()).toBe(true)
+    })
+
     it('opens the wizard when the empty-state CTA is clicked', async () => {
       vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(null)
 

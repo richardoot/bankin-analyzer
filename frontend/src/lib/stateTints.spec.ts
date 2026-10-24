@@ -8,9 +8,11 @@ import {
 } from './stateTints'
 
 /**
- * The dashboard's sources, read as text: the rule of the state tints
- * (agent-os/product/design-system.md) holds in the code, not only in the
- * components a spec happens to mount.
+ * The dashboard's and the budget's sources, read as text: the rule of the
+ * state tints (agent-os/product/design-system.md) holds in the code, not
+ * only in the components a spec happens to mount. Every budget component,
+ * the creation wizard's steps included, and the page; the page's error
+ * goes through InlineAlert, the one place red is written.
  */
 const dashboardSources = import.meta.glob<string>(
   [
@@ -18,17 +20,8 @@ const dashboardSources = import.meta.glob<string>(
     '../views/DashboardPage.vue',
     '../components/charts/IncomeExpensesChart.vue',
     '../components/charts/YearColumnsChart.vue',
-    '../components/budget/BudgetMonthBand.vue',
-    '../components/budget/BudgetReviewBand.vue',
-    '../components/budget/BudgetPlanningBand.vue',
-    '../components/budget/BudgetEditBar.vue',
-    '../components/budget/BudgetCategoryRow.vue',
-    '../components/budget/MonthsVsBudgetChart.vue',
-    '../components/budget/BudgetProjectsLine.vue',
-    '../components/budget/BudgetAmortizedLine.vue',
-    '../components/budget/BudgetTableControls.vue',
-    '../components/budget/MonthlyExpensesChart.vue',
-    '../components/budget/BudgetMonthlyMatrix.vue',
+    '../components/budget/**/*.vue',
+    '../views/BudgetPage.vue',
   ],
   { query: '?raw', import: 'default', eager: true }
 )
@@ -80,6 +73,11 @@ describe('the state tints', () => {
         '../components/budget/BudgetTableControls.vue',
         '../components/budget/MonthlyExpensesChart.vue',
         '../components/budget/BudgetMonthlyMatrix.vue',
+        '../components/budget/BudgetPlanHeader.vue',
+        '../components/budget/BudgetPlansHistoryModal.vue',
+        '../components/budget/SparklineChart.vue',
+        '../components/budget/wizard/PlanStepEnvelopes.vue',
+        '../views/BudgetPage.vue',
       ])
     )
   })
