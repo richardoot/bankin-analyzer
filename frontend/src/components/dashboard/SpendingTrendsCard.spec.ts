@@ -1434,7 +1434,10 @@ describe('SpendingTrendsCard, compact (the dashboard)', () => {
       wrapper.find('#spending-trends-title').text().replace(/\s+/g, ' ')
     ).toBe('Ce qui change · septembre, contre les 6 mois précédents')
     const link = wrapper.get('[data-testid="trends-all-link"]')
-    expect(link.text().replace(/\s+/g, ' ')).toBe('Les 4 tendances →')
+    expect(link.get('[data-testid="trends-all-link-desk"]').text()).toBe(
+      'Les 4 tendances'
+    )
+    expect(link.text()).toContain('→')
     const stub = wrapper
       .findAllComponents(RouterLinkStub)
       .find(l => l.attributes('data-testid') === 'trends-all-link')
@@ -1447,9 +1450,45 @@ describe('SpendingTrendsCard, compact (the dashboard)', () => {
     )
     const wrapper = await mountCard({ compact: true })
 
-    expect(
-      wrapper.get('[data-testid="trends-all-link"]').text().replace(/\s+/g, ' ')
-    ).toBe('1 tendance →')
+    const link = wrapper.get('[data-testid="trends-all-link"]')
+    expect(link.get('[data-testid="trends-all-link-desk"]').text()).toBe(
+      '1 tendance'
+    )
+    // Nothing left out on a phone either: the same words.
+    expect(link.get('[data-testid="trends-all-link-phone"]').text()).toBe(
+      '1 tendance'
+    )
+  })
+
+  it('keeps two tiles on a phone and says how many trends are left', async () => {
+    const wrapper = await mountCard({ compact: true })
+
+    const articles = wrapper.findAll('[data-testid="trends-list"] article')
+    expect(articles).toHaveLength(3)
+    expect(articles.map(a => a.classes('max-sm:hidden'))).toEqual([
+      false,
+      false,
+      true,
+    ])
+    const link = wrapper.get('[data-testid="trends-all-link"]')
+    const phone = link.get('[data-testid="trends-all-link-phone"]')
+    expect(phone.text()).toBe('2 autres tendances')
+    expect(phone.classes()).toContain('sm:hidden')
+    expect(link.get('[data-testid="trends-all-link-desk"]').classes()).toEqual([
+      'hidden',
+      'sm:inline',
+    ])
+  })
+
+  it('says « 1 autre tendance » when three moved', async () => {
+    getSpendingTrends.mockResolvedValue(
+      response({ insights: [toFile, savings, delivery, restaurant] })
+    )
+    const wrapper = await mountCard({ compact: true })
+
+    expect(wrapper.get('[data-testid="trends-all-link-phone"]').text()).toBe(
+      '1 autre tendance'
+    )
   })
 
   it('shows the three largest gaps by score, the lines to file left out', async () => {

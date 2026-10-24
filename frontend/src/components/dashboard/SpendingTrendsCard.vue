@@ -239,6 +239,22 @@
   })
 
   /**
+   * A phone shows two tiles, not three (agent-os/product/dashboard-refonte.md,
+   * lot 7): the third stays in the page, hidden below `sm`, and the link says
+   * what is left — « 14 autres tendances → ». With nothing left out it keeps
+   * the desktop label.
+   */
+  const PHONE_SHOWN = 2
+
+  const phoneTrendsLabel = computed(() => {
+    if (!allTrendsLabel.value) return null
+    const rest =
+      habits.value.length - Math.min(PHONE_SHOWN, compactInsights.value.length)
+    if (rest <= 0) return allTrendsLabel.value
+    return rest >= 2 ? `${rest} autres tendances` : '1 autre tendance'
+  })
+
+  /**
    * The paragraph Claude wrote for this very view, when the trends page
    * already read it in this session and its figures still hold: the best
    * sentence of the page. Never asked from here.
@@ -285,7 +301,13 @@
         class="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded text-sm font-medium text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-0 dark:text-primary-400"
         data-testid="trends-all-link"
       >
-        {{ allTrendsLabel }} <span aria-hidden="true">→</span>
+        <span class="sm:hidden" data-testid="trends-all-link-phone">{{
+          phoneTrendsLabel
+        }}</span
+        ><span class="hidden sm:inline" data-testid="trends-all-link-desk">{{
+          allTrendsLabel
+        }}</span>
+        <span aria-hidden="true">→</span>
       </RouterLink>
     </div>
 
@@ -415,8 +437,9 @@
           data-testid="trends-list"
         >
           <SpendingTrendTile
-            v-for="insight in compactInsights"
+            v-for="(insight, index) in compactInsights"
             :key="`${insight.kind}-${insight.unit.type}-${insight.unit.id}`"
+            :class="index >= PHONE_SHOWN ? 'max-sm:hidden' : undefined"
             :insight="insight"
             :reading="reading"
             :window="data.window"

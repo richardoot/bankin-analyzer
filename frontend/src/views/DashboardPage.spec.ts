@@ -1046,7 +1046,9 @@ describe('DashboardPage', () => {
         3
       )
       const link = card.get('[data-testid="trends-all-link"]')
-      expect(link.text().replace(/\s+/g, ' ')).toBe('Les 4 tendances →')
+      expect(link.get('[data-testid="trends-all-link-desk"]').text()).toBe(
+        'Les 4 tendances'
+      )
       expect(link.attributes('href')).toBe('/trends')
       for (const id of ['trends-month', 'trends-tabs', 'trends-scope']) {
         expect(card.find(`[data-testid="${id}"]`).exists(), id).toBe(false)
