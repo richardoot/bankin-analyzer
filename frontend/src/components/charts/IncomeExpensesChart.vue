@@ -301,7 +301,7 @@
   >
     <div
       data-testid="chart-legend"
-      class="mb-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400"
+      class="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 sm:gap-x-4 sm:text-xs dark:text-gray-400"
     >
       <template v-if="reading === 'everyday'">
         <span class="inline-flex items-center gap-1.5">

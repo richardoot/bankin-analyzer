@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardPage from './DashboardPage.vue'
@@ -333,6 +333,72 @@ describe('DashboardPage', () => {
     expect(wrapper.text()).toContain('Revenus et dépenses par mois')
     expect(wrapper.text()).not.toContain('Dépenses par mois')
     expect(wrapper.text()).not.toContain('Revenus par mois')
+  })
+
+  describe('the monthly chart, folded on a phone', () => {
+    const originalMatchMedia = window.matchMedia
+
+    function stubWidth(phone: boolean): void {
+      Object.defineProperty(window, 'matchMedia', {
+        value: vi.fn(() => ({
+          matches: phone,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+        writable: true,
+        configurable: true,
+      })
+    }
+
+    afterEach(() => {
+      Object.defineProperty(window, 'matchMedia', {
+        value: originalMatchMedia,
+        writable: true,
+        configurable: true,
+      })
+    })
+
+    async function mountPage() {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('opens « Revenus et dépenses par mois » on a desk', async () => {
+      stubWidth(false)
+      const wrapper = await mountPage()
+
+      const details = wrapper.get('[data-testid="dashboard-charts-section"]')
+      expect(details.element.tagName).toBe('DETAILS')
+      expect((details.element as HTMLDetailsElement).open).toBe(true)
+      expect(
+        wrapper.findComponent({ name: 'IncomeExpensesChart' }).exists()
+      ).toBe(true)
+    })
+
+    it('folds it below sm, its title in the summary, and draws the chart once opened', async () => {
+      stubWidth(true)
+      const wrapper = await mountPage()
+
+      const details = wrapper.get('[data-testid="dashboard-charts-section"]')
+      expect((details.element as HTMLDetailsElement).open).toBe(false)
+      expect(
+        wrapper.get('[data-testid="dashboard-charts-toggle"]').text()
+      ).toContain('Revenus et dépenses par mois')
+      expect(
+        wrapper.findComponent({ name: 'IncomeExpensesChart' }).exists()
+      ).toBe(false)
+
+      ;(details.element as HTMLDetailsElement).open = true
+      await details.trigger('toggle')
+      expect(
+        wrapper.findComponent({ name: 'IncomeExpensesChart' }).exists()
+      ).toBe(true)
+      expect(
+        wrapper.find('[data-testid="expenses-transactions-link"]').exists()
+      ).toBe(true)
+    })
   })
 
   it('should render charts when data is available', async () => {

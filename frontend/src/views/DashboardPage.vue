@@ -29,6 +29,7 @@
   import MonthBand from '@/components/dashboard/MonthBand.vue'
   import { useMonthData } from '@/composables/useMonthData'
   import { useAccountsStore } from '@/stores/accounts'
+  import { useMediaQuery } from '@/composables/useMediaQuery'
 
   const router = useRouter()
 
@@ -199,6 +200,18 @@
     fetchData()
     void fetchMonth()
   })
+
+  /**
+   * « Revenus et dépenses par mois » is a native `details`: open by
+   * default on a desk, folded below `sm` (agent-os/product/dashboard-refonte.md,
+   * lot 7). `open` is an attribute: the page follows the element's own
+   * toggle so a tap is never undone by a render.
+   */
+  const isPhone = useMediaQuery('(max-width: 639.98px)')
+  const chartsOpen = ref(!isPhone.value)
+  function onChartsToggle(event: Event): void {
+    chartsOpen.value = (event.target as HTMLDetailsElement).open
+  }
 </script>
 
 <template>
@@ -336,7 +349,10 @@
             </div>
           </header>
 
-          <BaseCard data-testid="dashboard-where-card" class="space-y-8">
+          <BaseCard
+            data-testid="dashboard-where-card"
+            class="space-y-6 sm:space-y-8"
+          >
             <StructureLines
               v-if="spendingStructure && everydaySpendingStructure"
               :actual="spendingStructure"
@@ -350,25 +366,46 @@
             />
 
             <!-- The months: a column opens its month, the link under the
-                 chart is the keyboard way to the whole period. -->
-            <div data-testid="dashboard-charts-section">
-              <SectionLabel as="h3" class="mb-2">
-                Revenus et dépenses par mois
-              </SectionLabel>
-              <IncomeExpensesChart
-                :months="monthlyData"
-                :reading="breakdownMode"
-                :habit="monthData?.habit ?? null"
-                @select-month="openMonth"
-              />
-              <div class="mt-2 flex justify-end">
-                <TransactionsLink
-                  :to="expensesLink"
-                  subject="la période"
-                  data-testid="expenses-transactions-link"
+                 chart is the keyboard way to the whole period. Open on a
+                 desk, folded on a phone (lot 7): the list matters more
+                 there, the chart is one tap away. -->
+            <details
+              data-testid="dashboard-charts-section"
+              class="group"
+              :open="chartsOpen"
+              @toggle="onChartsToggle"
+            >
+              <summary
+                class="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded px-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-0 [&::-webkit-details-marker]:hidden"
+                data-testid="dashboard-charts-toggle"
+              >
+                <SectionLabel as="h3"
+                  >Revenus et dépenses par mois</SectionLabel
+                >
+                <span
+                  aria-hidden="true"
+                  class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+                  >▾</span
+                >
+              </summary>
+              <!-- Drawn once open: Apex measures its box, a folded one is 0px. -->
+              <template v-if="chartsOpen">
+                <IncomeExpensesChart
+                  class="mt-2"
+                  :months="monthlyData"
+                  :reading="breakdownMode"
+                  :habit="monthData?.habit ?? null"
+                  @select-month="openMonth"
                 />
-              </div>
-            </div>
+                <div class="mt-2 flex justify-end">
+                  <TransactionsLink
+                    :to="expensesLink"
+                    subject="la période"
+                    data-testid="expenses-transactions-link"
+                  />
+                </div>
+              </template>
+            </details>
 
             <!-- Every category, the heaviest first; a sparkline only on
                  the big ones, every row's months once it is expanded. -->
