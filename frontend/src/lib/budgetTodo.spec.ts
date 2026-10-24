@@ -31,6 +31,7 @@ function input(overrides: Partial<BudgetTodoInput> = {}): BudgetTodoInput {
     projects: { totalBudget: 0 },
     categoriesWithoutEnvelope: [],
     hasCurrentPlan: true,
+    hasNextPlan: false,
     currentMonth: '2026-10',
     ...overrides,
   }
@@ -128,6 +129,22 @@ describe('budgetTodoItems', () => {
     expect(BUDGET_NEW_ROUTE).toEqual({ path: '/budget', query: { new: '1' } })
   })
 
+  it('does not ask for the next plan once it exists', () => {
+    expect(
+      budgetTodoItems(input({ currentMonth: '2026-12', hasNextPlan: true }))
+    ).toEqual([])
+    expect(
+      budgetTodoItems(
+        input({
+          status: 'past',
+          currentMonth: '2027-02',
+          hasCurrentPlan: false,
+          hasNextPlan: true,
+        })
+      )
+    ).toEqual([])
+  })
+
   it('does not ask for the next plan before the last month', () => {
     expect(budgetTodoItems(input({ currentMonth: '2026-11' }))).toEqual([])
   })
@@ -204,11 +221,10 @@ describe('budgetTodoItems', () => {
       })
     )
     // A finished plan reads as a review: the next plan first, then the
-    // envelopes over on average in one line.
+    // envelopes over on average in one line — its unfunded plan is closed.
     expect(unfunded.map(i => i.key)).toEqual([
       'no-current-plan',
       'envelopes-over-average',
-      'plan-unfunded',
     ])
   })
 
@@ -289,6 +305,33 @@ describe('budgetTodoItems', () => {
         ['no-current-plan', BUDGET_NEW_ROUTE],
         ['envelopes-over-average', { hash: '#budget-envelopes-title' }],
       ])
+    })
+
+    it('sends nowhere into editing a closed period', () => {
+      // An overdrawn reserve, a category without envelope, an unfunded plan:
+      // none of it is to do once the plan is over.
+      const overdrawn = budgetTodoItems(
+        input({
+          ...past,
+          plan: { endDate: '2026-06-30', projectReserve: 100 },
+          projects: { totalBudget: 400 },
+          categoriesWithoutEnvelope: [
+            {
+              categoryId: 'cat-tax',
+              categoryName: 'Impôts et taxes',
+              monthlyAverage: 59,
+            },
+          ],
+        })
+      )
+      expect(overdrawn).toEqual([])
+      const unfunded = budgetTodoItems(
+        input({
+          ...past,
+          plan: { endDate: '2026-06-30', projectReserve: -870 },
+        })
+      )
+      expect(unfunded).toEqual([])
     })
 
     it('says nothing of the envelopes when all held', () => {

@@ -3317,6 +3317,58 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
+    /** The plan shown, then « Hiver 2027 », the next one already made. */
+    const withNextPlan = () =>
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: planJunDec.id,
+          name: planJunDec.name,
+          startDate: planJunDec.startDate,
+          endDate: planJunDec.endDate,
+          monthCount: 7,
+          totalAmount: 300,
+          entryCount: 1,
+          createdAt: planJunDec.createdAt,
+        },
+        {
+          id: 'plan-winter',
+          name: 'Hiver 2027',
+          startDate: '2027-03-01',
+          endDate: '2027-05-31',
+          monthCount: 3,
+          totalAmount: 300,
+          entryCount: 1,
+          createdAt: planJunDec.createdAt,
+        },
+      ])
+
+    it('does not ask to prepare the next plan once it exists', async () => {
+      vi.setSystemTime(new Date('2026-12-10T12:00:00Z'))
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(
+        statisticsWith([250, 280, 250, 250, 250, 250, 120], null)
+      )
+      withNextPlan()
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="todo-item-plan-ending"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('does not ask for a plan when the one shown is over and the next is made', async () => {
+      vi.setSystemTime(new Date('2027-02-10T12:00:00Z'))
+      withNextPlan()
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="todo-item-no-current-plan"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
     it('enters edit mode on ?edit=1, then takes it off the URL', async () => {
       currentRoute.query = { edit: '1', from: 'todo' }
       const wrapper = mount(BudgetPage)

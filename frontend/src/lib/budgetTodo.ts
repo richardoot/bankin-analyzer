@@ -72,6 +72,8 @@ export interface BudgetTodoInput {
   categoriesWithoutEnvelope: readonly BudgetCategoryWithoutEnvelope[]
   /** Whether some plan covers today — another one than a past plan shown. */
   hasCurrentPlan: boolean
+  /** Whether a plan starts after the one shown ends: the next one exists. */
+  hasNextPlan: boolean
   /** Today's month, `YYYY-MM`. */
   currentMonth: string
 }
@@ -154,7 +156,10 @@ export function categoriesWithoutEnvelope(input: {
  * A finished plan (lot 6) is read as a review: the next plan comes first,
  * then one line for the envelopes it spent past on average — `reading`
  * must then be the plan's average, whichever month the band reads — that
- * scrolls to the list rather than to each row.
+ * scrolls to the list rather than to each row. Nothing else: its period is
+ * closed, there is nothing left to edit in it.
+ *
+ * The next plan is never asked for once it exists (`hasNextPlan`).
  */
 export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
   const { plan, status, reading, projects } = input
@@ -163,7 +168,7 @@ export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
 
   if (finished) {
     // 4, first on a finished plan: what it asks for is the next one.
-    if (!input.hasCurrentPlan) {
+    if (!input.hasCurrentPlan && !input.hasNextPlan) {
       items.push(
         item(
           'no-current-plan',
@@ -190,10 +195,11 @@ export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
         )
       )
     }
+    return items
   }
 
   // 1. Each envelope the month read spends past, the largest overrun first.
-  for (const over of finished ? [] : (reading?.envelopesOver ?? [])) {
+  for (const over of reading?.envelopesOver ?? []) {
     items.push(
       item(
         `envelope-${over.categoryId}`,
@@ -236,8 +242,12 @@ export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
   }
 
   // 4. The next plan: due when this one lives its last month, or when the
-  // one shown is over and none runs.
-  if (status === 'current' && plan.endDate.slice(0, 7) === input.currentMonth) {
+  // one shown is over and none runs — unless it already exists.
+  if (
+    status === 'current' &&
+    !input.hasNextPlan &&
+    plan.endDate.slice(0, 7) === input.currentMonth
+  ) {
     items.push(
       item(
         'plan-ending',

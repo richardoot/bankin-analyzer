@@ -703,6 +703,19 @@
     )
   })
 
+  /**
+   * Whether a plan starts after the one shown ends: the next one is made,
+   * « À faire » no longer asks for it.
+   */
+  const hasNextPlan = computed(() => {
+    const current = plan.value
+    if (!current) return false
+    const end = current.endDate.slice(0, 10)
+    return planWindows.value.some(
+      w => w.id !== current.id && w.startDate.slice(0, 10) > end
+    )
+  })
+
   const budgetTodoItems = computed(() => {
     const current = plan.value
     const status = planStatus(current)
@@ -728,6 +741,7 @@
         categories: input.categories,
       }),
       hasCurrentPlan: hasCurrentPlan.value,
+      hasNextPlan: hasNextPlan.value,
       currentMonth: currentYearMonth(),
     })
   })
