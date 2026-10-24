@@ -60,6 +60,7 @@
   import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import { useSuppressTabBar } from '@/composables/useMobileNavigation'
+  import { useBudgetDraft } from '@/composables/useBudgetDraft'
   import TodoCard from '@/components/dashboard/TodoCard.vue'
   import {
     budgetTodoItems as composeBudgetTodoItems,
@@ -119,17 +120,25 @@
   const sortOrder = ref<SortOrder>('amount-desc')
 
   /**
-   * The envelopes being edited. Until "Enregistrer" is pressed this is a
-   * draft: `savedBudgets` holds what the server actually has, which is what
-   * "Annuler" restores and what the modified-count is measured against.
+   * The envelopes and the reference income being edited: a draft until
+   * « Enregistrer », restored by « Annuler » (useBudgetDraft).
    */
-  const budgetInputs = ref<Map<string, number>>(new Map())
-  const savedBudgets = ref<Map<string, number>>(new Map())
-  /**
-   * The reference income being edited, in « Planification »: a draft like
-   * the envelopes, saved with them, restored by « Annuler ».
-   */
-  const referenceIncomeInput = ref<number | null>(null)
+  const draft = useBudgetDraft(plan)
+  const {
+    referenceIncomeInput,
+    savedReferenceIncome,
+    getBudgetForCategory,
+    getSavedBudget,
+    isCategoryDirty,
+    dirtyCategoryIds,
+    referenceIncomeDirty,
+    hasUnsavedChanges,
+    savedPlanTotal,
+    draftPlanTotal,
+    draftDelta,
+    updateBudgetInput,
+    resetAllBudgets,
+  } = draft
   const isEditing = ref(false)
   // The edit bar takes the tab bar's place below lg while it shows.
   useSuppressTabBar(() => isEditing.value || saveStatus.value === 'saved')
@@ -180,10 +189,6 @@
   )
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function getBudgetForCategory(categoryId: string): number {
-    return budgetInputs.value.get(categoryId) ?? 0
-  }
-
   // Per-category numbers used across the new layout. Each function may
   // return 0 when no data is available — the caller decides whether to
   // hide the column based on context.
@@ -424,13 +429,6 @@
     }
   })
 
-  /** Plan-zone income averages. */
-  const planIncomeAggregates = computed(() =>
-    comparison.incomeAggregates(visibleIncomeCategories.value)
-  )
-
-  const planIncomeAvg = computed(() => planIncomeAggregates.value.planIncomeAvg)
-
   /**
    * Income averaged over the complete plan months, whichever month is read:
    * a running month has received part of its income only.
@@ -445,14 +443,6 @@
     return total / indices.length
   })
 
-  /** Comparison-zone income — zero when no comparison selected. */
-  const comparisonIncomeAvg = computed(
-    () => planIncomeAggregates.value.comparisonIncomeAvg
-  )
-  const planToDateIncomeAvg = computed(
-    () => planIncomeAggregates.value.planToDateIncomeAvg
-  )
-
   /**
    * Monthly income reference for the chart's "Revenus" line, its tooltip
    * savings, and the savings summary's fallback block. Must NOT default to
@@ -466,18 +456,11 @@
    */
   const chartAverageIncome = computed(() => {
     if (completeMonthsIncomeAvg.value > 0) return completeMonthsIncomeAvg.value
-    if (comparisonIncomeAvg.value > 0) return comparisonIncomeAvg.value
-    if (planToDateIncomeAvg.value > 0) return planToDateIncomeAvg.value
-    return planIncomeAvg.value
+    const income = comparison.incomeAggregates(visibleIncomeCategories.value)
+    if (income.comparisonIncomeAvg > 0) return income.comparisonIncomeAvg
+    if (income.planToDateIncomeAvg > 0) return income.planToDateIncomeAvg
+    return income.planIncomeAvg
   })
-
-  /**
-   * The plan's total, the same figure everywhere on the page: over every
-   * entry of the plan, not only the categories the statistics happen to
-   * list (an envelope on a category that spent nothing this window would
-   * otherwise vanish from the summary while the edit bar still counts it).
-   */
-  const totalBudget = computed(() => draftPlanTotal.value)
 
   const monthlyTotalExpenses = computed(() => {
     const cats = visibleExpenseCategories.value
@@ -1148,8 +1131,7 @@
    */
   function enterEditMode(options: { focusIncome?: boolean } = {}): void {
     clearSaveStatus()
-    budgetInputs.value = new Map(savedBudgets.value)
-    referenceIncomeInput.value = savedReferenceIncome.value
+    draft.restore()
     isEditing.value = true
     void nextTick(() => {
       document
@@ -1165,8 +1147,7 @@
 
   function cancelEdit(): void {
     clearSaveStatus()
-    budgetInputs.value = new Map(savedBudgets.value)
-    referenceIncomeInput.value = savedReferenceIncome.value
+    draft.restore()
     isEditing.value = false
   }
 
@@ -1179,58 +1160,6 @@
       ?.focus({ preventScroll: true })
   }
 
-  /** Categories whose draft envelope differs from what the server holds. */
-  const dirtyCategoryIds = computed(() => {
-    const ids = new Set([
-      ...savedBudgets.value.keys(),
-      ...budgetInputs.value.keys(),
-    ])
-    const changed: string[] = []
-    for (const id of ids) {
-      const before = savedBudgets.value.get(id) ?? 0
-      const after = budgetInputs.value.get(id) ?? 0
-      if (before !== after) changed.push(id)
-    }
-    return changed
-  })
-
-  /** The reference income the server holds, the « before » of its field. */
-  const savedReferenceIncome = computed(
-    () => plan.value?.referenceIncome ?? null
-  )
-  const referenceIncomeDirty = computed(
-    () => referenceIncomeInput.value !== savedReferenceIncome.value
-  )
-
-  const hasUnsavedChanges = computed(
-    () => dirtyCategoryIds.value.length > 0 || referenceIncomeDirty.value
-  )
-
-  /** Envelope the server holds for a category — the "before" of the diff. */
-  function getSavedBudget(categoryId: string): number {
-    return savedBudgets.value.get(categoryId) ?? 0
-  }
-
-  function isCategoryDirty(categoryId: string): boolean {
-    return getSavedBudget(categoryId) !== getBudgetForCategory(categoryId)
-  }
-
-  /**
-   * Totals of the whole plan, saved and draft. Deliberately over every entry
-   * rather than over the visible categories: an envelope on a category that
-   * spent nothing this window is absent from the statistics, and dropping it
-   * from the total would make the figure disagree with the plan itself.
-   */
-  function sumOf(budgets: Map<string, number>): number {
-    let total = 0
-    for (const amount of budgets.values()) total += amount
-    return total
-  }
-
-  const savedPlanTotal = computed(() => sumOf(savedBudgets.value))
-  const draftPlanTotal = computed(() => sumOf(budgetInputs.value))
-  const draftDelta = computed(() => draftPlanTotal.value - savedPlanTotal.value)
-
   /**
    * The comparison's monthly spending, the history « Marge vs historique »
    * weighs the draft against; null while no comparison is chosen.
@@ -1242,21 +1171,15 @@
       : null
   )
 
-  /** Take the entries of a freshly loaded plan as the new saved reference. */
+  /** A freshly loaded plan: its entries are the new saved reference. */
   function adoptPlanEntries(loaded: BudgetPlanDto | null): void {
-    savedBudgets.value = new Map(
-      (loaded?.entries ?? []).map(e => [e.categoryId, e.amount])
-    )
-    budgetInputs.value = new Map(savedBudgets.value)
-    referenceIncomeInput.value = loaded?.referenceIncome ?? null
+    draft.adopt(loaded)
     isEditing.value = false
   }
 
   async function saveBudget() {
     if (!plan.value) return
-    const entries = Array.from(budgetInputs.value.entries())
-      .filter(([, amount]) => amount > 0)
-      .map(([categoryId, amount]) => ({ categoryId, amount }))
+    const entries = draft.entriesToSave()
     try {
       isSaving.value = true
       clearSaveStatus()
@@ -1282,15 +1205,9 @@
     }
   }
 
-  function updateBudgetInput(categoryId: string, value: string) {
-    const num = parseFloat(value)
-    budgetInputs.value.set(categoryId, Number.isFinite(num) ? num : 0)
-  }
-
-  /** Apply an arbitrary amount to a category's budget input. */
+  /** A reference figure taken as the envelope: in edit mode only. */
   function setBudgetValue(categoryId: string, amount: number) {
-    if (!isEditing.value) return
-    budgetInputs.value.set(categoryId, Math.round(amount))
+    if (isEditing.value) draft.setBudgetValue(categoryId, amount)
   }
 
   /**
@@ -1311,28 +1228,15 @@
         averagesSource.value === 'historical'
           ? getHistoricalAverage(cat)
           : getPlanActualAverage(cat)
-      if (ref > 0) {
-        budgetInputs.value.set(cat.categoryId, Math.round(ref))
-      }
+      if (ref > 0) draft.setBudgetValue(cat.categoryId, ref)
     }
   }
 
   function adjustAllByPercent(percent: number) {
-    for (const cat of visibleExpenseCategories.value) {
-      const current = budgetInputs.value.get(cat.categoryId) ?? 0
-      if (current > 0) {
-        budgetInputs.value.set(
-          cat.categoryId,
-          Math.round(current * (1 + percent / 100))
-        )
-      }
-    }
-  }
-
-  // No confirmation needed: emptying the draft is undone by "Annuler", and
-  // nothing has left the browser until "Enregistrer".
-  function resetAllBudgets() {
-    budgetInputs.value.clear()
+    draft.adjustAllByPercent(
+      visibleExpenseCategories.value.map(c => c.categoryId),
+      percent
+    )
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -1763,7 +1667,7 @@
                 :monthly-totals="monthlyTotalExpenses"
                 :month-labels="statistics.monthLabels"
                 :average-income="chartAverageIncome"
-                :total-budget="totalBudget"
+                :total-budget="draftPlanTotal"
                 :plan-start-month="chartRanges.planStartMonth"
                 :plan-end-month="chartRanges.planEndMonth"
                 :comparison-start-month="chartRanges.comparisonStartMonth"
