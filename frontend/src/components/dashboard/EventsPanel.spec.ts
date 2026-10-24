@@ -82,6 +82,32 @@ describe('EventsPanel', () => {
     expect(href).toContain('gross=1')
   })
 
+  it('writes the family under the name on a phone, where its column is hidden', () => {
+    const wrapper = mountPanel()
+
+    const row = wrapper.get('[data-testid="events-panel-row-tag-japon"]')
+    expect(
+      row.get('[data-testid="events-panel-family-tag-japon"]').classes()
+    ).toEqual(expect.arrayContaining(['hidden', 'sm:table-cell']))
+    const phone = row.get('[data-testid="events-panel-family-phone-tag-japon"]')
+    expect(phone.text()).toBe('Voyages')
+    expect(phone.classes()).toContain('sm:hidden')
+    // No family, no second line.
+    expect(
+      wrapper
+        .find('[data-testid="events-panel-family-phone-tag-mariage"]')
+        .exists()
+    ).toBe(false)
+  })
+
+  it('gives the analysis link a 44px row to tap on a phone', () => {
+    const wrapper = mountPanel()
+
+    expect(
+      wrapper.get('[data-testid="events-panel-analysis-tag-japon"]').classes()
+    ).toEqual(expect.arrayContaining(['min-h-11', 'sm:min-h-0']))
+  })
+
   it("dots each event in its family's color, the tag's own without a family", () => {
     const wrapper = mountPanel()
 

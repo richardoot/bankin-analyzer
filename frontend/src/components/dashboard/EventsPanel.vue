@@ -79,7 +79,7 @@
 <template>
   <div
     data-testid="events-panel"
-    class="rounded-lg bg-gray-50 p-4 text-[13px] text-gray-600 dark:bg-slate-800/50 dark:text-gray-400"
+    class="rounded-lg bg-gray-50 p-3 text-[13px] sm:p-4 text-gray-600 dark:bg-slate-800/50 dark:text-gray-400"
     @keydown.esc.stop="emit('close')"
   >
     <div class="mb-2 flex justify-end">
@@ -107,10 +107,16 @@
           >
             Famille
           </th>
-          <th scope="col" class="w-24 py-1.5 pr-3 text-right font-semibold">
+          <th
+            scope="col"
+            class="w-20 py-1.5 pr-2 text-right font-semibold sm:w-24 sm:pr-3"
+          >
             Montant
           </th>
-          <th scope="col" class="w-20 py-1.5 pr-1 text-right font-semibold">
+          <th
+            scope="col"
+            class="w-[4.5rem] py-1.5 pr-1 text-right font-semibold sm:w-20"
+          >
             <span class="sr-only">Analyse</span>
           </th>
           <th scope="col" class="w-8 py-1.5">
@@ -124,7 +130,7 @@
           :key="event.id"
           :data-testid="`events-panel-row-${event.id}`"
         >
-          <td class="py-1.5 pr-3">
+          <td class="py-1.5 pr-2 sm:pr-3">
             <span class="flex min-w-0 items-center gap-2">
               <span
                 :data-testid="`events-panel-dot-${event.id}`"
@@ -132,9 +138,19 @@
                 :style="{ backgroundColor: dotColor(event) }"
                 aria-hidden="true"
               />
-              <span class="truncate text-gray-900 dark:text-gray-100">{{
-                event.name
-              }}</span>
+              <span class="min-w-0">
+                <span
+                  class="line-clamp-2 block break-words text-gray-900 sm:line-clamp-none sm:truncate dark:text-gray-100"
+                  >{{ event.name }}</span
+                >
+                <!-- No family column on a phone: the family under the name. -->
+                <span
+                  v-if="event.familyName"
+                  class="block truncate text-xs text-gray-500 sm:hidden dark:text-gray-400"
+                  :data-testid="`events-panel-family-phone-${event.id}`"
+                  >{{ event.familyName }}</span
+                >
+              </span>
             </span>
           </td>
           <td
@@ -144,14 +160,14 @@
             {{ event.familyName ?? '—' }}
           </td>
           <td
-            class="py-1.5 pr-3 text-right font-medium whitespace-nowrap text-gray-900 tabular-nums dark:text-gray-100"
+            class="py-1.5 pr-2 text-right font-medium whitespace-nowrap text-gray-900 tabular-nums sm:pr-3 dark:text-gray-100"
           >
             {{ euros(event.amount) }}
           </td>
           <td class="py-1.5 pr-1 text-right">
             <RouterLink
               :to="`/tags/${event.id}`"
-              class="text-xs font-medium whitespace-nowrap text-primary-700 hover:underline dark:text-primary-400"
+              class="inline-flex min-h-11 items-center justify-end text-xs font-medium whitespace-nowrap text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
               :aria-label="`Analyse de ${event.name}`"
               :data-testid="`events-panel-analysis-${event.id}`"
             >
@@ -177,7 +193,7 @@
       <p
         v-if="byCategory.length > 0"
         data-testid="events-panel-by-category"
-        class="min-w-0 flex-1 tabular-nums"
+        class="min-w-0 flex-1 tabular-nums max-sm:basis-full"
       >
         <span class="font-medium text-gray-900 dark:text-gray-100"
           >Par catégorie</span
