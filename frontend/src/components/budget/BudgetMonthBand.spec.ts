@@ -91,7 +91,7 @@ describe('BudgetMonthBand', () => {
     expect(wrapper.get('[data-testid="budget-month-title"]').text()).toBe(
       'Ce mois-ci · octobre, au 23'
     )
-    expect(wrapper.text()).toContain("L'enveloppe est ramenée au jour du mois")
+    expect(wrapper.text()).toContain('L’enveloppe est ramenée au jour du mois')
   })
 
   it('names a closed month, and the average', () => {
@@ -123,7 +123,7 @@ describe('BudgetMonthBand', () => {
     expect(badge.classes()).toContain('bg-teal-50')
     expect(tile.text()).toContain('à ce stade du mois')
     expect(text(tile.get('[data-testid="budget-detail-spent"]').text())).toBe(
-      "1 373 € d'enveloppe au 23 · 1 850 € pour le mois"
+      '1 373 € d’enveloppe au 23 · 1 850 € pour le mois'
     )
     // The figure is in ink, never in a state colour.
     expect(
@@ -172,12 +172,12 @@ describe('BudgetMonthBand', () => {
     )
     const tile = wrapper.get('[data-testid="budget-tile-spent"]')
     expect(text(tile.get('[data-testid="budget-detail-spent"]').text())).toBe(
-      "1 850 € d'enveloppe pour le mois"
+      '1 850 € d’enveloppe pour le mois'
     )
     expect(tile.text()).not.toContain('à ce stade du mois')
     // 1 790 on 1 850: −3 %, within the envelope.
     expect(tile.get('[data-testid="budget-badge-spent"]').text()).toBe(
-      "dans l'enveloppe"
+      'dans l’enveloppe'
     )
   })
 
@@ -205,7 +205,8 @@ describe('BudgetMonthBand', () => {
       budgetMonthReading(input({ selectedMonth: '2026-08', progress: null }))
     )
     const value = wrapper.get('[data-testid="budget-month-value-remaining"]')
-    expect(text(value.text())).toBe('-90 €')
+    // The typographic minus, never the hyphen Intl writes.
+    expect(text(value.text())).toBe('−90 €')
     expect(value.classes()).toContain('text-amber-700')
     const badge = wrapper.get('[data-testid="budget-badge-remaining"]')
     expect(text(badge.text())).toBe('dépassé de 90 €')
@@ -247,7 +248,7 @@ describe('BudgetMonthBand', () => {
       { completeMonthsCount: 0, monthOptions: OPTIONS.slice(3) }
     )
     const badge = wrapper.get('[data-testid="budget-badge-savings"]')
-    expect(badge.text()).toBe("pas d'objectif")
+    expect(badge.text()).toBe('pas d’objectif')
     expect(badge.attributes('data-tone')).toBe('neutral')
     expect(wrapper.get('[data-testid="budget-detail-savings"]').text()).toBe(
       'pas encore de mois clos'

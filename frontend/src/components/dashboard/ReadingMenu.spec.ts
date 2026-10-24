@@ -111,7 +111,7 @@ describe('ReadingMenu', () => {
       expect(
         wrapper.get('[data-testid="reading-menu-panel"]').text()
       ).toContain(
-        '« En attente » est une préférence enregistrée, partagée avec le Budget ; « reçus » ne vaut que pour cette lecture.'
+        'Ces réglages valent pour le tableau de bord, les tendances et le budget. « Reçus » est retenu par ce navigateur, « en attente » est enregistré sur votre compte.'
       )
     })
 

@@ -1,6 +1,10 @@
 <script setup lang="ts">
   import { computed } from 'vue'
-  import { formatCompactCurrency } from '@/lib/formatters'
+  import {
+    formatEuros as euros,
+    formatSignedEuros,
+    plural,
+  } from '@/lib/formatters'
   import { STATE_BADGE_CLASSES, deltaTone } from '@/lib/stateTints'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
@@ -38,23 +42,13 @@
 
   const emit = defineEmits<{ save: []; cancel: [] }>()
 
-  const euros = (value: number): string => formatCompactCurrency(value)
-
   const hasChanges = computed(() => props.dirtyCount > 0 || props.incomeChanged)
   const tone = computed(() => deltaTone(props.delta))
 
   /** « −30 € par mois », « +30 € par mois », « 0 € par mois ». */
-  const deltaLabel = computed(() => {
-    const d = props.delta
-    const amount =
-      Math.round(d) === 0
-        ? euros(0)
-        : `${d > 0 ? '+' : '−'}${euros(Math.abs(d))}`
-    return `${amount} par mois`
-  })
-
-  const plural = (count: number, word: string): string =>
-    `${word}${count > 1 ? 's' : ''}`
+  const deltaLabel = computed(
+    () => `${formatSignedEuros(props.delta)} par mois`
+  )
 
   /** « 2 enveloppes modifiées », « revenus de référence modifiés ». */
   const changesLabel = computed(() => {
@@ -99,7 +93,7 @@
         Budget enregistré.
       </template>
       <InlineAlert v-else-if="status === 'error'">
-        L'enregistrement a échoué : {{ errorMessage ?? 'réessayez.' }} Vos
+        L’enregistrement a échoué : {{ errorMessage ?? 'réessayez.' }} Vos
         modifications sont conservées.
       </InlineAlert>
     </div>

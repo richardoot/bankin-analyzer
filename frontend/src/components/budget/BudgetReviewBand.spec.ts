@@ -136,10 +136,10 @@ describe('BudgetReviewBand', () => {
       text(tile.get('[data-testid="budget-month-value-spent"]').text())
     ).toBe('1 997 € par mois')
     const badge = tile.get('[data-testid="budget-badge-spent"]')
-    expect(text(badge.text())).toBe("+8 % vs 1 850 € d'enveloppe")
+    expect(text(badge.text())).toBe('+8 % vs 1 850 € d’enveloppe')
     expect(badge.attributes('data-tone')).toBe('over')
     expect(text(tile.get('[data-testid="budget-detail-spent"]').text())).toBe(
-      "5 990 € sur 5 550 € d'enveloppe sur le plan"
+      '5 990 € sur 5 550 € d’enveloppe sur le plan'
     )
     expect(tile.find('[data-testid="budget-sparkline-spent"]').exists()).toBe(
       true
@@ -247,7 +247,7 @@ describe('BudgetReviewBand', () => {
     ).toBe('1 700 €')
     expect(
       text(wrapper.get('[data-testid="budget-detail-spent"]').text())
-    ).toBe("1 850 € d'enveloppe pour le mois")
+    ).toBe('1 850 € d’enveloppe pour le mois')
     expect(
       text(wrapper.get('[data-testid="budget-month-value-savings"]').text())
     ).toBe('900 €')

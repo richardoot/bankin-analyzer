@@ -4,9 +4,26 @@
     STATE_BADGE_CLASSES,
     deltaTone,
     gapOf,
+    invertTone,
     type StateTone,
   } from '@/lib/stateTints'
-  import { formatCompactCurrency } from '@/lib/formatters'
+  import {
+    formatEuros as euros,
+    formatSignedEuros as signedEuros,
+    plural,
+  } from '@/lib/formatters'
+  import {
+    BADGE,
+    BADGE_LINE,
+    DETAIL,
+    FIGURE,
+    FIGURE_UNIT,
+    LINK,
+    TILE,
+    TILES_GRID,
+    TILE_TITLE,
+    figureClass,
+  } from '@/components/budget/bandTiles'
   import BaseCard from '@/components/ui/BaseCard.vue'
 
   /**
@@ -50,21 +67,6 @@
     /** No comparison yet: the page brings « Comparer avec » to hand. */
     'choose-comparison': []
   }>()
-
-  const euros = (value: number): string => formatCompactCurrency(value)
-
-  /** « +115 € », « −30 € »: a typographic minus. */
-  const signedEuros = (value: number): string => {
-    if (Math.round(value) === 0) return euros(0)
-    return `${value > 0 ? '+' : '−'}${euros(Math.abs(value))}`
-  }
-
-  const plural = (count: number, word: string): string =>
-    `${word}${count > 1 ? 's' : ''}`
-
-  /** Flips teal and amber: for a figure where more is better. */
-  const invertTone = (tone: StateTone): StateTone =>
-    tone === 'under' ? 'over' : tone === 'over' ? 'under' : 'neutral'
 
   // ── Revenus de référence ────────────────────────────────────────────────
   const incomeChanged = computed(
@@ -164,20 +166,6 @@
       detail: `historique ${euros(history)} par mois${label}`,
     }
   })
-
-  const TILE =
-    'flex min-w-0 flex-col gap-1 rounded-lg sm:gap-1.5 border border-gray-200 p-3 sm:p-4 dark:border-slate-700'
-  const TILE_TITLE = 'text-sm font-medium text-gray-500 dark:text-gray-400'
-  const FIGURE =
-    'text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100'
-  const FIGURE_UNIT =
-    'text-xs font-normal text-gray-500 sm:text-sm dark:text-gray-400'
-  const BADGE =
-    'inline-flex max-w-full items-center rounded-md px-2 py-0.5 font-semibold tabular-nums sm:rounded-full sm:whitespace-nowrap'
-  const DETAIL =
-    'text-[11px] sm:text-xs text-gray-500 tabular-nums dark:text-gray-400'
-  const LINK =
-    "relative mt-auto self-start pt-1 text-[11px] font-medium text-primary-700 sm:text-xs pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
 </script>
 
 <template>
@@ -194,15 +182,12 @@
       >
         Planification · {{ planName }}
       </h2>
-      <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
+      <p :class="DETAIL">
         Ce que le plan prévoit par mois, à jour de la saisie
       </p>
     </header>
 
-    <div
-      class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4"
-      data-testid="budget-planning-tiles"
-    >
+    <div :class="TILES_GRID" data-testid="budget-planning-tiles">
       <!-- The income the plan was drawn against: a field, the one place
            to set it after the wizard. -->
       <article :class="TILE" data-testid="budget-tile-reference-income">
@@ -249,7 +234,7 @@
         <p :class="FIGURE" data-testid="budget-planning-value-total">
           {{ euros(draftTotal) }}<span :class="FIGURE_UNIT"> par mois</span>
         </p>
-        <p class="text-[11px] sm:text-xs">
+        <p :class="BADGE_LINE">
           <span
             :class="[BADGE, STATE_BADGE_CLASSES[totalTile.tone]]"
             :data-tone="totalTile.tone"
@@ -267,18 +252,13 @@
         <h3 :class="TILE_TITLE">Épargne prévue</h3>
         <template v-if="savingsTile">
           <p
-            class="text-[22px] leading-tight font-semibold sm:text-2xl tabular-nums"
-            :class="
-              savingsTile.negative
-                ? 'text-amber-700 dark:text-amber-400'
-                : 'text-gray-900 dark:text-gray-100'
-            "
+            :class="figureClass(savingsTile.negative)"
             data-testid="budget-planning-value-savings"
           >
             {{ euros(savingsTile.value)
             }}<span :class="FIGURE_UNIT"> par mois</span>
           </p>
-          <p class="text-[11px] sm:text-xs">
+          <p :class="BADGE_LINE">
             <span
               :class="[BADGE, STATE_BADGE_CLASSES[savingsTile.badge.tone]]"
               :data-tone="savingsTile.badge.tone"
@@ -306,7 +286,7 @@
             {{ signedEuros(marginTile.value)
             }}<span :class="FIGURE_UNIT"> par mois</span>
           </p>
-          <p class="text-[11px] sm:text-xs">
+          <p :class="BADGE_LINE">
             <span
               :class="[BADGE, STATE_BADGE_CLASSES[marginTile.tone]]"
               :data-tone="marginTile.tone"

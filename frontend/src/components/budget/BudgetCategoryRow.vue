@@ -234,7 +234,7 @@
         v => v > props.budget + TOLERANCE
       ).length
       parts.push(
-        `${over === 0 ? 'aucun' : over} au-dessus de l'enveloppe de ${formatCompactCurrency(props.budget)}`
+        `${over === 0 ? 'aucun' : over} au-dessus de l’enveloppe de ${formatCompactCurrency(props.budget)}`
       )
     } else {
       parts.push('sans enveloppe')
@@ -688,7 +688,7 @@
             <strong class="font-semibold text-gray-900 dark:text-gray-100">{{
               formatCurrency(exceptionalAverage)
             }}</strong>
-            d'événements
+            d’événements
           </span>
           <TransactionsLink
             v-if="actualWindow"

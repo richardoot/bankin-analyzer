@@ -41,7 +41,7 @@
       data-testid="budget-past-plan-warning"
       class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300"
     >
-      Ce plan est terminé. Modifier ses enveloppes change le bilan d'une période
+      Ce plan est terminé. Modifier ses enveloppes change le bilan d’une période
       déjà écoulée.
     </div>
 

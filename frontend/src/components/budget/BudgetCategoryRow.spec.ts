@@ -82,7 +82,7 @@ describe('BudgetCategoryRow', () => {
   it('says the chart in words: months, those above, the running one', () => {
     const chart = mountRow().findComponent(MonthsVsBudgetChart)
     expect(chart.props('label')).toMatch(
-      /^5 mois, 2 au-dessus de l'enveloppe de 133\s€, octobre en cours$/
+      /^5 mois, 2 au-dessus de l’enveloppe de 133\s€, octobre en cours$/
     )
   })
 
@@ -93,7 +93,7 @@ describe('BudgetCategoryRow', () => {
     }).findComponent(MonthsVsBudgetChart)
     expect(chart.props('selectedMonth')).toBe('2026-07')
     expect(chart.props('label')).toMatch(
-      /^5 mois, aucun au-dessus de l'enveloppe de 500\s€, octobre en cours, juillet isolé$/
+      /^5 mois, aucun au-dessus de l’enveloppe de 500\s€, octobre en cours, juillet isolé$/
     )
   })
 

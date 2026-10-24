@@ -60,3 +60,14 @@ export function deltaTone(delta: number): StateTone {
   if (Math.round(delta) === 0) return 'neutral'
   return delta < 0 ? 'under' : 'over'
 }
+
+/**
+ * Flips teal and amber, for a figure where more is better — a saving, a
+ * margin: above its reference it is the good side (teal), below it the
+ * shortfall (amber). Neutral stays neutral.
+ */
+export function invertTone(tone: StateTone): StateTone {
+  if (tone === 'under') return 'over'
+  if (tone === 'over') return 'under'
+  return 'neutral'
+}

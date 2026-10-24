@@ -2,7 +2,7 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { BudgetPlanDto, TagBudgetSummaryDto } from '@/lib/api'
 import type { PlanStatus } from '@/components/budget/planStatus'
 import type { BudgetMonthCategory, BudgetMonthReading } from '@/lib/budgetMonth'
-import { formatCompactCurrency } from '@/lib/formatters'
+import { formatEuros } from '@/lib/formatters'
 import type { TodoItem } from '@/lib/todo'
 
 /**
@@ -76,11 +76,8 @@ export interface BudgetTodoInput {
   currentMonth: string
 }
 
-const euros = (value: number): string => formatCompactCurrency(value)
-
-/** « −870 € », the typographic minus the band writes. */
-const signedEuros = (value: number): string =>
-  value < 0 ? `−${euros(-value)}` : euros(value)
+/** « 1 053 € », « −870 € »: whole euros, the typographic minus. */
+const euros = formatEuros
 
 /** « 31 décembre », the plan's last day. */
 const DAY_MONTH = new Intl.DateTimeFormat('fr-FR', {
@@ -255,7 +252,7 @@ export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
     items.push(
       item(
         'plan-unfunded',
-        `Le plan ne tient pas dans les revenus de référence (${signedEuros(reserve)})`,
+        `Le plan ne tient pas dans les revenus de référence (${euros(reserve)})`,
         BUDGET_EDIT_ROUTE,
         -reserve
       )

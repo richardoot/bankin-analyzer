@@ -5,6 +5,7 @@ import {
   STATE_COLORS,
   deltaTone,
   gapOf,
+  invertTone,
 } from './stateTints'
 
 /**
@@ -55,6 +56,12 @@ describe('the state tints', () => {
     expect(deltaTone(0)).toBe('neutral')
     // Under half a euro, nothing a whole-euro figure would show.
     expect(deltaTone(0.4)).toBe('neutral')
+  })
+
+  it('flips teal and amber for a figure where more is better', () => {
+    expect(invertTone('under')).toBe('over')
+    expect(invertTone('over')).toBe('under')
+    expect(invertTone('neutral')).toBe('neutral')
   })
 
   it('reads the dashboard sources it guards', () => {

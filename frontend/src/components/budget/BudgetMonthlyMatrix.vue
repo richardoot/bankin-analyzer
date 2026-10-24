@@ -148,12 +148,12 @@
     const smoothed = amortizedAt(row, index)
     const ofWhich = smoothed ? ` (dont ${formatCurrency(smoothed)} lissés)` : ''
     if (row.budget <= 0) {
-      return `${row.categoryName} · ${month} : ${formatCurrency(amount)}${ofWhich} — pas d'enveloppe`
+      return `${row.categoryName} · ${month} : ${formatCurrency(amount)}${ofWhich} — pas d’enveloppe`
     }
     const gap = row.budget - amount
     const verdict =
       gap >= 0
-        ? `${formatCurrency(gap)} sous l'enveloppe`
+        ? `${formatCurrency(gap)} sous l’enveloppe`
         : `${formatCurrency(-gap)} au-dessus`
     return `${row.categoryName} · ${month} : ${formatCurrency(amount)}${ofWhich} sur ${formatCurrency(row.budget)} — ${verdict}`
   }

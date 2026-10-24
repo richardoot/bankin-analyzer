@@ -173,7 +173,7 @@
       v-else-if="plans.length === 0"
       class="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
     >
-      Aucun budget enregistré pour l'instant.
+      Aucun budget enregistré pour l’instant.
     </p>
 
     <!-- Phone: one card per plan -->

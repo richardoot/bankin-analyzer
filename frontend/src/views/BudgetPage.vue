@@ -211,7 +211,8 @@
 
   /**
    * Status badge inline on the row, derived from the most actionable signal.
-   * Priority: actual overshoot ⚠ > budget covers history ✓ > nothing.
+   * Priority: « Dépassé » (the actual past the envelope) > « Couvert » (the
+   * envelope covers the history, edit mode only) > nothing.
    */
   function getRowStatus(
     category: CategoryAverageDto
@@ -1513,7 +1514,7 @@
           data-testid="empty-history-button"
           @click="isHistoryOpen = true"
         >
-          Voir l'historique ({{ planCount }})
+          Voir l’historique ({{ planCount }})
         </BaseButton>
       </div>
     </div>

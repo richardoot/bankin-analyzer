@@ -9,7 +9,25 @@
     gapOf,
     type StateTone,
   } from '@/lib/stateTints'
-  import { formatCompactCurrency, formatMonth } from '@/lib/formatters'
+  import {
+    formatEuros as euros,
+    formatMonth,
+    formatSignedEuros as signedEuros,
+    formatSignedPercent as gapLabel,
+    plural,
+  } from '@/lib/formatters'
+  import {
+    BADGE,
+    BADGE_LINE,
+    DETAIL,
+    FIGURE,
+    FIGURE_UNIT,
+    LINK,
+    TILE,
+    TILES_GRID,
+    TILE_TITLE,
+    figureClass,
+  } from '@/components/budget/bandTiles'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
@@ -61,27 +79,6 @@
   const TOLERANCE = 0.005
   /** How many envelopes spent past the badge names before « et N autres ». */
   const NAMED = 3
-
-  const euros = (value: number): string => formatCompactCurrency(value)
-
-  const PERCENT = new Intl.NumberFormat('fr-FR', {
-    style: 'percent',
-    maximumFractionDigits: 0,
-    signDisplay: 'exceptZero',
-  })
-
-  /** « −25 % », « +16 % »: a typographic minus, as the dashboard writes it. */
-  const gapLabel = (ratio: number): string =>
-    PERCENT.format(ratio).replace('-', '−')
-
-  /** « +115 € », « −150 € ». */
-  const signedEuros = (value: number): string => {
-    if (Math.round(value) === 0) return euros(0)
-    return `${value > 0 ? '+' : '−'}${euros(Math.abs(value))}`
-  }
-
-  const plural = (count: number, word: string): string =>
-    `${word}${count > 1 ? 's' : ''}`
 
   const isPlan = computed(() => props.reading.kind !== 'month')
 
@@ -137,12 +134,12 @@
     const { tone, ratio } = r.spentGap
     const badge =
       tone === 'neutral'
-        ? "dans l'enveloppe"
-        : `${gapLabel(ratio)} vs ${euros(r.envelope)} d'enveloppe`
+        ? 'dans l’enveloppe'
+        : `${gapLabel(ratio)} vs ${euros(r.envelope)} d’enveloppe`
     const detail =
       isPlan.value && r.spentTotal !== null
-        ? `${euros(r.spentTotal)} sur ${euros(r.envelopeTotal)} d'enveloppe sur le plan`
-        : `${euros(r.envelope)} d'enveloppe pour le mois`
+        ? `${euros(r.spentTotal)} sur ${euros(r.envelopeTotal)} d’enveloppe sur le plan`
+        : `${euros(r.envelope)} d’enveloppe pour le mois`
     return { value: r.spent, tone, badge, detail }
   })
 
@@ -163,7 +160,7 @@
           tone: r.savingsRealizedGap.tone,
           text: `${signedEuros(r.savingsRealizedGap.amount)} vs ${euros(r.savingsDecided ?? 0)} décidés`,
         }
-      : { tone: 'neutral' as StateTone, text: "pas d'objectif" }
+      : { tone: 'neutral' as StateTone, text: 'pas d’objectif' }
     const income = `Revenus ${euros(r.incomeRead)} − dépensé`
     const detail =
       isPlan.value && r.savingsRealizedTotal !== null
@@ -224,18 +221,6 @@
   /** Below `sm` the tiles stand two by two: the sparkline narrows with them. */
   const isPhone = useMediaQuery('(max-width: 639.98px)')
   const sparkWidth = computed(() => (isPhone.value ? 100 : 120))
-
-  const TILE =
-    'flex min-w-0 flex-col gap-1 rounded-lg sm:gap-1.5 border border-gray-200 p-3 sm:p-4 dark:border-slate-700'
-  const TILE_TITLE = 'text-sm font-medium text-gray-500 dark:text-gray-400'
-  const FIGURE =
-    'text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100'
-  const FIGURE_UNIT =
-    'text-xs font-normal text-gray-500 sm:text-sm dark:text-gray-400'
-  const BADGE =
-    'inline-flex max-w-full items-center rounded-md px-2 py-0.5 font-semibold tabular-nums sm:rounded-full sm:whitespace-nowrap'
-  const DETAIL =
-    'text-[11px] sm:text-xs text-gray-500 tabular-nums dark:text-gray-400'
 </script>
 
 <template>
@@ -255,10 +240,7 @@
         >
           {{ title }}
         </h2>
-        <p
-          class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400"
-          data-testid="budget-review-subtitle"
-        >
+        <p :class="DETAIL" data-testid="budget-review-subtitle">
           {{ subtitle }}
         </p>
       </div>
@@ -287,10 +269,7 @@
       </div>
     </header>
 
-    <div
-      class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4"
-      data-testid="budget-review-tiles"
-    >
+    <div :class="TILES_GRID" data-testid="budget-review-tiles">
       <!-- Spent, per month on the plan, against the envelope. -->
       <article :class="TILE" data-testid="budget-tile-spent">
         <h3 :class="TILE_TITLE">Dépensé</h3>
@@ -299,7 +278,7 @@
             {{ euros(spentTile.value)
             }}<span v-if="isPlan" :class="FIGURE_UNIT"> par mois</span>
           </p>
-          <p class="text-[11px] sm:text-xs">
+          <p :class="BADGE_LINE">
             <span
               :class="[BADGE, STATE_BADGE_CLASSES[spentTile.tone]]"
               :data-tone="spentTile.tone"
@@ -319,7 +298,7 @@
             :color="DATA_HUE"
             :end-color="STATE_COLORS[sparkTone]"
             :width="sparkWidth"
-            label="Dépenses des mois du plan, l'enveloppe en pointillé"
+            label="Dépenses des mois du plan, l’enveloppe en pointillé"
             data-testid="budget-sparkline-spent"
           />
         </template>
@@ -334,18 +313,13 @@
         <h3 :class="TILE_TITLE">Épargne réalisée</h3>
         <template v-if="savingsTile">
           <p
-            class="text-[22px] leading-tight font-semibold sm:text-2xl tabular-nums"
-            :class="
-              savingsTile.negative
-                ? 'text-amber-700 dark:text-amber-400'
-                : 'text-gray-900 dark:text-gray-100'
-            "
+            :class="figureClass(savingsTile.negative)"
             data-testid="budget-month-value-savings"
           >
             {{ euros(savingsTile.value)
             }}<span v-if="isPlan" :class="FIGURE_UNIT"> par mois</span>
           </p>
-          <p class="text-[11px] sm:text-xs">
+          <p :class="BADGE_LINE">
             <span
               :class="[BADGE, STATE_BADGE_CLASSES[savingsTile.badge.tone]]"
               :data-tone="savingsTile.badge.tone"
@@ -372,7 +346,7 @@
             ` sur ${envelopesTile.total}`
           }}</span>
         </p>
-        <p class="text-[11px] sm:text-xs">
+        <p :class="BADGE_LINE">
           <span
             :class="[BADGE, STATE_BADGE_CLASSES[envelopesTile.tone]]"
             :data-tone="envelopesTile.tone"
@@ -386,7 +360,7 @@
         <button
           v-if="envelopesTile.firstId"
           type="button"
-          class="relative mt-auto self-start pt-1 text-[11px] font-medium text-primary-700 sm:text-xs pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
+          :class="LINK"
           data-testid="budget-envelopes-link"
           @click="emit('show-envelope', envelopesTile.firstId)"
         >
@@ -402,7 +376,7 @@
             {{ euros(projectsTile.committed)
             }}<span :class="FIGURE_UNIT">{{ projectsTile.unit }}</span>
           </p>
-          <p class="text-[11px] sm:text-xs">
+          <p :class="BADGE_LINE">
             <span
               :class="[BADGE, STATE_BADGE_CLASSES[projectsTile.badge.tone]]"
               :data-tone="projectsTile.badge.tone"

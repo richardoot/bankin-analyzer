@@ -126,6 +126,11 @@ describe('BudgetPlanningBand', () => {
     const w = mountBand({ draftTotal: 2600, delta: 750 })
     const figure = w.get('[data-testid="budget-planning-value-savings"]')
     expect(figure.classes()).toContain('text-amber-700')
+    // Negative amounts take the typographic minus, the reserve too.
+    expect(text(figure.text())).toBe('−135 € par mois')
+    expect(
+      text(w.get('[data-testid="budget-detail-savings-planned"]').text())
+    ).toBe('réserve projets −635 € × 6 mois = −3 810 €')
     const badge = w.get('[data-testid="budget-badge-savings-planned"]')
     expect(badge.text()).toBe('le plan dépasse les revenus')
     expect(badge.attributes('data-tone')).toBe('over')

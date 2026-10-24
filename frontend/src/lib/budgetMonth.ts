@@ -1,5 +1,5 @@
 import type { BudgetPlanDto } from '@/lib/api'
-import { gapOf, type StateTone } from '@/lib/stateTints'
+import { gapOf, invertTone, type StateTone } from '@/lib/stateTints'
 
 /**
  * « Ce mois-ci » on the Budget page (agent-os/product/budget-refonte.md,
@@ -116,13 +116,6 @@ function sum(values: number[]): number {
 
 function mean(values: number[]): number {
   return values.length === 0 ? 0 : sum(values) / values.length
-}
-
-/** Flips teal and amber: for a figure where more is better (savings). */
-function invertTone(tone: StateTone): StateTone {
-  if (tone === 'under') return 'over'
-  if (tone === 'over') return 'under'
-  return 'neutral'
 }
 
 /** What « Ce mois-ci » of the Budget page shows, for the month read. */

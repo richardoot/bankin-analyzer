@@ -14,9 +14,11 @@
    * « Lecture ▾ »: the ways of reading the figures, out of the page and
    * behind one button that says, in a line, which one is on. The reading
    * (Vie courante / Tout) and the two reimbursement switches live here,
-   * with what tells them apart; the state itself stays with its owners —
-   * the reading in useDashboardData, the switches in the filters store —
-   * and comes back through the three v-models.
+   * with what tells them apart; the state itself stays with its owner, the
+   * filters store — the reading and « reçus » remembered in this browser,
+   * « en attente » kept by the server — and comes back through the three
+   * v-models. The same menu, the same reading, on the dashboard, the
+   * trends and the budget.
    *
    * A popover hanging under the button on a desk, a sheet (BaseModal)
    * under `sm`. Escape, a click elsewhere or Tab out closes the popover
@@ -266,11 +268,12 @@
               Déduire les remboursements en attente
             </span>
           </label>
-          <!-- The two switches look alike but are not: one is a reading of
-               this screen, the other a preference the budget shares. -->
+          <!-- The two switches look alike but are not kept alike: one is
+               remembered by this browser, the other by the account. -->
           <p class="text-xs text-gray-500 dark:text-gray-400">
-            « En attente » est une préférence enregistrée, partagée avec le
-            Budget ; « reçus » ne vaut que pour cette lecture.
+            Ces réglages valent pour le tableau de bord, les tendances et le
+            budget. « Reçus » est retenu par ce navigateur, « en attente » est
+            enregistré sur votre compte.
           </p>
           <InlineAlert
             v-if="pendingSyncError"

@@ -85,7 +85,7 @@ describe('BudgetMonthlyMatrix', () => {
 
     const cell = wrapper.find('[data-testid="matrix-cell-Divers-2026-06"]')
     expect(cell.classes().join(' ')).not.toContain('bg-amber-50')
-    expect(cell.attributes('title')).toContain("pas d'enveloppe")
+    expect(cell.attributes('title')).toContain('pas d’enveloppe')
   })
 
   it('writes the envelopes and their total in ink', () => {
