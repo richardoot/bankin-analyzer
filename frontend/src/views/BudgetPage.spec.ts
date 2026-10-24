@@ -49,16 +49,66 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    deductPendingReimbursements: false,
-    setDeductPendingReimbursements: vi.fn(),
-  }),
+// The reading lives in the filters store, shared with the dashboard:
+// reactive here, as it is there, and reset before each test.
+const filters = vi.hoisted(() => ({
+  breakdownMode: 'everyday' as 'everyday' | 'real',
+  deductReimbursements: true,
+  deductPendingReimbursements: false,
+  lastSyncError: null as string | null,
 }))
+vi.mock('@/stores/filters', async () => {
+  const { reactive } = await import('vue')
+  const state = reactive(filters)
+  return {
+    useFiltersStore: () => ({
+      get breakdownMode() {
+        return state.breakdownMode
+      },
+      setBreakdownMode: (mode: 'everyday' | 'real') => {
+        state.breakdownMode = mode
+      },
+      get deductReimbursements() {
+        return state.deductReimbursements
+      },
+      setDeductReimbursements: (value: boolean) => {
+        state.deductReimbursements = value
+      },
+      get deductPendingReimbursements() {
+        return state.deductPendingReimbursements
+      },
+      setDeductPendingReimbursements: (value: boolean) => {
+        state.deductPendingReimbursements = value
+      },
+      get lastSyncError() {
+        return state.lastSyncError
+      },
+    }),
+  }
+})
 
 import { api } from '@/lib/api'
 
 enableAutoUnmount(afterEach)
+
+/** « Lecture ▾ » then « Tout »: the reading, from the menu of the header. */
+async function readAll(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+  await wrapper.get('[data-testid="breakdown-mode-real"]').trigger('click')
+  await flushPromises()
+}
+
+/** Into edit mode, then « Comparer avec » on a preset. */
+async function compareWith(
+  wrapper: ReturnType<typeof mount>,
+  preset: '3m' | '6m' | '12m'
+): Promise<void> {
+  await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+  await wrapper
+    .get(`[data-testid="comparison-option-${preset}"]`)
+    .trigger('click')
+  await flushPromises()
+}
 
 const samplePlan: BudgetPlanDto = {
   id: 'plan-1',
@@ -130,6 +180,10 @@ describe('BudgetPage', () => {
       totalSpent: 0,
     })
     localStorage.clear()
+    filters.breakdownMode = 'everyday'
+    filters.deductReimbursements = true
+    filters.deductPendingReimbursements = false
+    filters.lastSyncError = null
   })
 
   describe('empty state', () => {
@@ -220,12 +274,12 @@ describe('BudgetPage', () => {
       expect(wrapper.text()).toMatch(/2026/)
     })
 
-    it('renders the filters card and the category list', async () => {
+    it('renders the category list, without a filters card', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
       expect(wrapper.find('[data-testid="budget-filters-card"]').exists()).toBe(
-        true
+        false
       )
       expect(
         wrapper.find('[data-testid="budget-row-Alimentation"]').exists()
@@ -362,12 +416,7 @@ describe('BudgetPage', () => {
         new Error('Le serveur est injoignable.')
       )
 
-      await wrapper.find('[data-testid="comparison-trigger"]').trigger('click')
-      await flushPromises()
-      await wrapper
-        .find('[data-testid="comparison-option-3m"]')
-        .trigger('click')
-      await flushPromises()
+      await compareWith(wrapper, '3m')
 
       expect(
         wrapper.find('[data-testid="budget-statistics-error"]').text()
@@ -384,18 +433,90 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
+    it('mounts « Comparer avec » in edit mode only, and drops the comparison on leaving it', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      // Tracking: no selector, no menu button of the old dropdown.
+      expect(wrapper.find('[data-testid="comparison-selector"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="comparison-trigger"]').exists()).toBe(
+        false
+      )
+
+      await compareWith(wrapper, '3m')
+      const header = () =>
+        wrapper.get('[data-testid="budget-table-header"]').text()
+      // In the table's own header, the Historique column with it.
+      expect(
+        wrapper
+          .get('[data-testid="budget-table"]')
+          .element.parentElement?.querySelector(
+            '[data-testid="comparison-selector"]'
+          )
+      ).not.toBeNull()
+      expect(header()).toContain('Historique')
+
+      vi.mocked(api.getBudgetStatistics).mockClear()
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="comparison-selector"]').exists()).toBe(
+        false
+      )
+      expect(header()).not.toContain('Historique')
+      // Back to the plan's own months.
+      expect(api.getBudgetStatistics).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startDate: '2026-05-01' })
+      )
+
+      // A new edit starts without a comparison.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper
+          .get('[data-testid="comparison-option-3m"]')
+          .attributes('aria-checked')
+      ).toBe('false')
+      expect(header()).not.toContain('Historique')
+      wrapper.unmount()
+    })
+
+    it('says a refetch in a line under the header, where the filters card was', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      let finish: (value: BudgetStatisticsDto) => void = () => {}
+      vi.mocked(api.getBudgetStatistics).mockReturnValueOnce(
+        new Promise(resolve => {
+          finish = resolve
+        })
+      )
+
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="toggle-deduct-reimbursements"]')
+        .trigger('click')
+      await flushPromises()
+
+      const line = wrapper.get('[data-testid="budget-statistics-refreshing"]')
+      expect(line.text()).toBe('Mise à jour des chiffres…')
+      expect(line.attributes('role')).toBe('status')
+
+      finish(sampleStatistics)
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="budget-statistics-refreshing"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
     it('widens the stats fetch range to envelop comparison + plan when comparison is selected', async () => {
       const wrapper = mount(BudgetPage, { attachTo: document.body })
       await flushPromises()
       vi.mocked(api.getBudgetStatistics).mockClear()
 
-      // Open the comparison selector and pick "3 mois précédents"
-      await wrapper.find('[data-testid="comparison-trigger"]').trigger('click')
-      await flushPromises()
-      await wrapper
-        .find('[data-testid="comparison-option-3m"]')
-        .trigger('click')
-      await flushPromises()
+      // In edit mode, « Comparer avec » on « 3 mois ».
+      await compareWith(wrapper, '3m')
 
       expect(api.getBudgetStatistics).toHaveBeenCalledOnce()
       const args = vi.mocked(api.getBudgetStatistics).mock.calls[0]?.[0]
@@ -1209,7 +1330,6 @@ describe('BudgetPage', () => {
     })
 
     it('reads the grid through the active breakdown mode', async () => {
-      localStorage.setItem('budget-breakdown-mode', 'everyday')
       vi.mocked(api.getBudgetStatistics).mockResolvedValue({
         ...sampleStatistics,
         periodMonths: 7,
@@ -1303,8 +1423,7 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       // 320 spent against a 250 envelope.
       expect(foodRow(wrapper).text()).toContain('Dépassé')
@@ -1321,8 +1440,7 @@ describe('BudgetPage', () => {
         .text()
         .replace(/\s+/g, ' ')
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       const after = wrapper
         .get('[data-testid="budget-row-Transport"]')
@@ -1350,8 +1468,7 @@ describe('BudgetPage', () => {
       expect(chip.text()).toContain('hors')
       expect(chip.text()).toMatch(/120/)
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       expect(
         wrapper.get('[data-testid="budget-exceptional-Alimentation"]').text()
@@ -1369,66 +1486,84 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('hides the mode selector when no event touches the plan', async () => {
+    it('offers the reading in the « Lecture » menu of the header, not in a band of the table', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The same menu as the dashboard's, saying the state on its button.
+      const button = wrapper.get('[data-testid="reading-menu-button"]')
+      expect(button.text()).toBe(
+        'Lecture : vie courante · remboursements reçus déduits'
+      )
+      // No grey band, no chips of events above the table.
+      expect(
+        wrapper.find('[data-testid="budget-breakdown-mode"]').exists()
+      ).toBe(false)
+      expect(wrapper.find('[data-testid="budget-mode-real"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid^="budget-event-"]').exists()).toBe(
+        false
+      )
+
+      // « Tout » is written to the store, the one reading of every page.
+      await readAll(wrapper)
+      expect(filters.breakdownMode).toBe('real')
+      expect(foodRow(wrapper).text()).toContain('Dépassé')
+
+      wrapper.unmount()
+    })
+
+    it('opens on the reading the store keeps', async () => {
+      filters.breakdownMode = 'real'
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(foodRow(wrapper).text()).toContain('Dépassé')
+      wrapper.unmount()
+    })
+
+    it('does not offer the choice of reading when no event touches the plan', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
 
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      expect(
-        wrapper.find('[data-testid="budget-breakdown-mode"]').exists()
-      ).toBe(false)
+      const button = wrapper.get('[data-testid="reading-menu-button"]')
+      expect(button.text()).toBe('Lecture : remboursements reçus déduits')
+      await button.trigger('click')
+      expect(wrapper.find('[data-testid="breakdown-mode-real"]').exists()).toBe(
+        false
+      )
 
       wrapper.unmount()
     })
 
-    it('lists the events overlapping the window and links to their analysis', async () => {
-      vi.mocked(api.getTags).mockResolvedValue([
-        {
-          id: 'tag-trip',
-          name: 'Vacances Italie',
-          color: '#06b6d4',
-          icon: null,
-          transactionCount: 5,
-          isExceptional: true,
-          eventStartDate: '2026-05-10',
-          eventEndDate: '2026-05-14',
-          budgetAmount: null,
-          status: 'past',
-          familyId: null,
-          family: null,
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-        },
-        {
-          // Outside the plan window → not listed.
-          id: 'tag-ski',
-          name: 'Week-end Ski',
-          color: null,
-          icon: null,
-          transactionCount: 3,
-          isExceptional: true,
-          eventStartDate: '2025-01-10',
-          eventEndDate: '2025-01-12',
-          budgetAmount: null,
-          status: 'past',
-          familyId: null,
-          family: null,
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-        },
-      ])
-
+    it('refetches the figures from the menu’s switches, kept in the store', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
+      vi.mocked(api.getBudgetStatistics).mockClear()
 
-      const chip = wrapper.get('[data-testid="budget-event-Vacances Italie"]')
-      expect(
-        wrapper.find('[data-testid="budget-event-Week-end Ski"]').exists()
-      ).toBe(false)
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="toggle-deduct-reimbursements"]')
+        .trigger('click')
+      await flushPromises()
 
-      await chip.trigger('click')
-      expect(routerPush).toHaveBeenCalledWith('/tags/tag-trip')
+      expect(filters.deductReimbursements).toBe(false)
+      expect(api.getBudgetStatistics).toHaveBeenLastCalledWith(
+        expect.objectContaining({ deductReimbursements: false })
+      )
+
+      await wrapper
+        .get('[data-testid="toggle-deduct-pending"]')
+        .trigger('click')
+      await flushPromises()
+      expect(filters.deductPendingReimbursements).toBe(true)
+      expect(api.getBudgetStatistics).toHaveBeenLastCalledWith(
+        expect.objectContaining({ deductPendingReimbursements: true })
+      )
 
       wrapper.unmount()
     })
@@ -1586,7 +1721,6 @@ describe('BudgetPage', () => {
 
     it('degrades to the raw series when the backend sent no split', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
-      localStorage.setItem('budget-breakdown-mode', 'everyday')
 
       const wrapper = mount(BudgetPage)
       await flushPromises()
@@ -1701,6 +1835,22 @@ describe('BudgetPage', () => {
       })
       const wrapper = mount(BudgetPage)
       await flushPromises()
+
+      // Tracking: no comparison, no Historique column.
+      const grid = () =>
+        (
+          wrapper.get('[data-testid="budget-table"]').element as HTMLElement
+        ).style.getPropertyValue('--row-grid')
+      expect(wrapper.find('[data-testid="comparison-selector"]').exists()).toBe(
+        false
+      )
+      expect(grid()).toBe('1fr auto auto auto')
+      expect(
+        wrapper.get('[data-testid="budget-table-header"]').text()
+      ).not.toContain('Historique')
+
+      // Editing, « Comparer avec » sets the past the envelopes are set against.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
       wrapper
         .findComponent({ name: 'ComparisonSelector' })
         .vm.$emit('update:range', {
@@ -1714,26 +1864,23 @@ describe('BudgetPage', () => {
       await flushPromises()
 
       const row = wrapper.get('[data-testid="budget-row-Alimentation"]')
-      // Historique · figure · months · link.
+      // Historique · envelope field · actual · months · link.
+      expect(grid()).toBe('1fr auto auto auto auto auto')
       expect(
-        (
-          wrapper.get('[data-testid="budget-table"]').element as HTMLElement
-        ).style.getPropertyValue('--row-grid')
-      ).toBe('1fr auto auto auto auto')
+        wrapper.get('[data-testid="budget-table-header"]').text()
+      ).toContain('Historique')
       expect(row.text()).toMatch(/100,00/)
-      // The row's one link is the figure's, the plan so far.
-      expect(
-        JSON.parse(
-          wrapper
-            .get('[data-testid="budget-actual-link-Alimentation"]')
-            .attributes('data-to') ?? '{}'
-        ).query.label
-      ).toBe('Alimentation · plan')
       expect(
         wrapper
           .find('[data-testid="budget-historical-link-Alimentation"]')
           .exists()
       ).toBe(false)
+      // The historical figure can be taken as the envelope.
+      expect(
+        wrapper
+          .find('[data-testid="budget-take-historical-Alimentation"]')
+          .exists()
+      ).toBe(true)
 
       await row.get('button').trigger('click')
       const historical = JSON.parse(
@@ -1746,14 +1893,6 @@ describe('BudgetPage', () => {
         to: '2026-05-31',
         label: 'Alimentation · Mars–Mai 2026',
       })
-
-      // Editing, the historical figure can be taken as the envelope.
-      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
-      expect(
-        wrapper
-          .find('[data-testid="budget-take-historical-Alimentation"]')
-          .exists()
-      ).toBe(true)
     })
 
     it('links each subcategory line to its rows over the statistics window, « none » included', async () => {
@@ -1839,10 +1978,7 @@ describe('BudgetPage', () => {
       })
       const wrapper = mount(BudgetPage)
       await flushPromises()
-      wrapper
-        .findComponent({ name: 'BudgetTableControls' })
-        .vm.$emit('set-mode', 'real')
-      await flushPromises()
+      await readAll(wrapper)
       await wrapper
         .get('[data-testid="budget-row-Alimentation"]')
         .get('button')
@@ -2099,10 +2235,15 @@ describe('BudgetPage', () => {
         linkOf(wrapper.get('[data-testid="budget-amortized-row-link-Maison"]'))
           .query
       ).toMatchObject({ ids: 'tx-fridge' })
-      // The mode is offered, and says the totals are no longer the cash.
+      // The reading is offered, in the menu, and says the totals are no
+      // longer the cash; the table carries no note of its own.
       expect(
-        wrapper.get('[data-testid="budget-everyday-amortized-note"]').text()
-      ).toContain("ne correspond plus à l'argent sorti du compte")
+        wrapper.find('[data-testid="budget-everyday-amortized-note"]').exists()
+      ).toBe(false)
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      expect(
+        wrapper.get('[data-testid="dashboard-amortized-note"]').text()
+      ).toContain('ne correspond plus à l’argent sorti du compte')
       wrapper.unmount()
     })
 
@@ -2110,8 +2251,7 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       expect(
         wrapper.find('[data-testid="budget-row-High-tech"]').exists()

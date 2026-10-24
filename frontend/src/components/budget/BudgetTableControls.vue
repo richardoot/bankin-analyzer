@@ -1,6 +1,5 @@
 <script setup lang="ts">
   import { computed } from 'vue'
-  import type { BreakdownMode } from '@/composables/useBudgetComparison'
   import { SORT_OPTIONS, type SortOrder } from './sortOptions'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
@@ -9,10 +8,12 @@
 
   /**
    * Everything that steers the category table without being a row of it:
-   * entering edit mode, sorting, the month selector, the closed-period
-   * warning, the edit-mode quick actions, and the everyday/real tracking
-   * mode with its events band. Pure controls — every decision leaves as an
-   * event, every figure arrives as a prop.
+   * entering edit mode, sorting, the month selector, the comparison (the
+   * `comparison` slot, which the page fills in edit mode only), the
+   * closed-period warning and the edit-mode quick actions. The reading
+   * (Vie courante / Tout) is the page's « Lecture » menu, not a control of
+   * the table. Pure controls — every decision leaves as an event, every
+   * figure arrives as a prop.
    */
   const props = defineProps<{
     editing: boolean
@@ -26,14 +27,6 @@
     completeMonthsCount: number
     actualPeriodLabel: string
     planIsPast: boolean
-    hasExceptional: boolean
-    breakdownMode: BreakdownMode
-    planEvents: { id: string; name: string; color: string | null }[]
-    /**
-     * A smoothed purchase has a slice in the plan: the everyday reading
-     * spreads it, so a total over the period no longer matches the cash.
-     */
-    hasAmortized?: boolean | undefined
     /** Which reference « Appliquer les moyennes » would copy into the envelopes. */
     averagesSource: 'historical' | 'actual' | 'none'
   }>()
@@ -44,8 +37,6 @@
     'apply-averages': []
     'adjust-percent': [percent: number]
     reset: []
-    'set-mode': [mode: BreakdownMode]
-    'open-tag': [tagId: string]
   }>()
   const monthSegments = computed<SegmentedOption<string | null>[]>(() => [
     {
@@ -112,6 +103,11 @@
           </option>
         </select>
       </div>
+    </div>
+
+    <!-- « Comparer avec », when the page gives it: in edit mode only. -->
+    <div v-if="$slots.comparison" class="mb-4">
+      <slot name="comparison" />
     </div>
 
     <!-- Month selector: the plan averaged, or one month on its own.
@@ -222,84 +218,6 @@
         tableau. Rien ne part avant « Enregistrer », et « Annuler » restaure
         tout.
       </p>
-    </div>
-
-    <!-- Tracking mode: everyday keeps a one-off event from reading as an
-         overrun of the recurring budget, and spreads a smoothed purchase
-         over its months. -->
-    <div
-      v-if="hasExceptional || hasAmortized"
-      data-testid="budget-breakdown-mode"
-      class="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800"
-    >
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
-          Suivi
-        </span>
-        <SegmentedControl
-          :model-value="breakdownMode"
-          size="sm"
-          label="Mode de suivi du budget"
-          :options="[
-            {
-              value: 'everyday',
-              label: 'Vie courante',
-              testId: 'budget-mode-everyday',
-            },
-            { value: 'real', label: 'Tout', testId: 'budget-mode-real' },
-          ]"
-          @update:model-value="emit('set-mode', $event)"
-        />
-        <span
-          v-if="hasExceptional"
-          class="hidden text-xs leading-snug text-gray-600 sm:inline dark:text-gray-400"
-        >
-          {{
-            breakdownMode === 'everyday'
-              ? 'Les dépenses d’événements sont sorties du réel : une enveloppe n’est dépassée que par la vie courante.'
-              : 'Les dépenses d’événements sont incluses : une enveloppe peut être dépassée par un projet ponctuel.'
-          }}
-        </span>
-        <span
-          v-else-if="breakdownMode === 'real'"
-          class="hidden text-xs leading-snug text-gray-600 sm:inline dark:text-gray-400"
-        >
-          Les achats lissés comptent en entier à leur date.
-        </span>
-      </div>
-
-      <!-- Said on every screen: the figures are no longer the cash. -->
-      <p
-        v-if="hasAmortized && breakdownMode === 'everyday'"
-        data-testid="budget-everyday-amortized-note"
-        class="mt-2 text-xs leading-snug text-teal-800 dark:text-teal-300"
-      >
-        Les achats lissés y comptent par tranches mensuelles : un total sur la
-        période ne correspond plus à l'argent sorti du compte.
-      </p>
-
-      <div
-        v-if="planEvents.length > 0"
-        class="mt-2 flex flex-wrap items-center gap-1.5"
-      >
-        <span class="text-xs text-gray-600 dark:text-gray-400">
-          Événements de la période :
-        </span>
-        <button
-          v-for="event in planEvents"
-          :key="event.id"
-          type="button"
-          :data-testid="`budget-event-${event.name}`"
-          class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
-          @click="emit('open-tag', event.id)"
-        >
-          <span
-            class="inline-block h-2 w-2 rounded-full shrink-0"
-            :style="{ backgroundColor: event.color ?? '#9ca3af' }"
-          ></span>
-          {{ event.name }}
-        </button>
-      </div>
     </div>
   </div>
 </template>

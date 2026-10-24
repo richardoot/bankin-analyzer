@@ -14,7 +14,9 @@
    * the button that asked for it, in BudgetEditBar.
    *
    * Everything shown derives from the plan itself; the page only says
-   * whether editing is in flight (which locks the actions).
+   * whether editing is in flight (which locks the actions). The `actions`
+   * slot takes what the page adds after them: the « Lecture » menu, as on
+   * the dashboard.
    */
   const props = withDefaults(
     defineProps<{
@@ -126,7 +128,7 @@
 
     <!-- Without a plan the page's empty state carries « Créer un budget »
          and « Historique »: the header does not repeat them. -->
-    <div v-if="plan" class="flex items-center gap-2 shrink-0">
+    <div v-if="plan" class="flex shrink-0 flex-wrap items-center gap-2">
       <BaseButton
         v-if="(planCount ?? 0) > 0"
         variant="secondary"
@@ -157,6 +159,7 @@
         <IconPlus class="h-4 w-4" />
         Nouveau budget
       </BaseButton>
+      <slot name="actions" />
     </div>
   </div>
 </template>

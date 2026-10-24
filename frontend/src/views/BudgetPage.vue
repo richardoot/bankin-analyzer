@@ -8,7 +8,6 @@
     BudgetStatisticsDto,
     CategoryAverageDto,
     TagBudgetSummaryDto,
-    TagDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
   import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
@@ -45,29 +44,22 @@
   import { monthWindow, transactionsLink } from '@/lib/transactionsLink'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
-  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import { useSuppressTabBar } from '@/composables/useMobileNavigation'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
 
-  // Real vs everyday tracking, persisted so the choice survives a reload.
-  // Defaults to everyday: a holiday inside the plan must not read as an
-  // overrun of the recurring budget.
-  const BREAKDOWN_MODE_KEY = 'budget-breakdown-mode'
-  const breakdownMode = ref<BreakdownMode>(
-    localStorage.getItem(BREAKDOWN_MODE_KEY) === 'real' ? 'real' : 'everyday'
-  )
-
-  function setBreakdownMode(mode: BreakdownMode): void {
-    breakdownMode.value = mode
-    try {
-      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
-    } catch {
-      // Private browsing: the choice simply does not persist.
-    }
-  }
+  // The reading — Vie courante or Tout, received reimbursements taken off
+  // or not — is the one the dashboard and the trends read: kept by the
+  // filters store, remembered in this browser, set from the « Lecture »
+  // menu. Defaults to everyday: a holiday inside the plan must not read as
+  // an overrun of the recurring budget.
+  const breakdownMode = computed<BreakdownMode>({
+    get: () => filtersStore.breakdownMode,
+    set: mode => filtersStore.setBreakdownMode(mode),
+  })
 
   // ── State ────────────────────────────────────────────────────────────────
   const plan = ref<BudgetPlanDto | null>(null)
@@ -92,7 +84,10 @@
   const comparisonRange = ref<ComparisonRange | null>(null)
   const yearAgoAvailable = ref(false)
 
-  const deductReimbursements = ref(true)
+  const deductReimbursements = computed<boolean>({
+    get: () => filtersStore.deductReimbursements,
+    set: value => filtersStore.setDeductReimbursements(value),
+  })
   // A debt still owed: one preference shared with the dashboard, kept by the
   // backend. The switch reads and writes the store.
   const deductPendingReimbursements = computed<boolean>({
@@ -123,9 +118,6 @@
   const selectedMonth = ref<string | null>(null)
 
   const expandedCategories = ref<Set<string>>(new Set())
-
-  /** Exceptional tags owned by the user, for the events band. */
-  const exceptionalTags = ref<TagDto[]>([])
 
   /** Projects overlapping the plan, with spend vs envelope. */
   const projects = ref<TagBudgetSummaryDto | null>(null)
@@ -471,22 +463,6 @@
     visibleExpenseCategories.value.some(c => getExceptionalAverage(c) > 0.005)
   )
 
-  /**
-   * Exceptional events whose declared period overlaps the analysed window.
-   * Tags without a period (a party at home) cannot be placed in time and are
-   * therefore not listed — their spending still shows in the row annotations.
-   */
-  const planEvents = computed(() => {
-    const range = referenceDateRange.value
-    if (!range) return []
-    return exceptionalTags.value.filter(t => {
-      if (!t.eventStartDate || !t.eventEndDate) return false
-      return (
-        t.eventStartDate <= range.endDate && t.eventEndDate >= range.startDate
-      )
-    })
-  })
-
   function openTagAnalysis(tagId: string): void {
     void router.push(`/tags/${tagId}`)
   }
@@ -712,19 +688,6 @@
     })
   }
 
-  /**
-   * Exceptional tags, used to name the events behind the amber annotations.
-   * Non-fatal: without them the amounts still show, only the links are lost.
-   */
-  async function fetchExceptionalTags() {
-    try {
-      const tags = await api.getTags()
-      exceptionalTags.value = tags.filter(t => t.isExceptional)
-    } catch {
-      exceptionalTags.value = []
-    }
-  }
-
   /** Projects overlapping the plan, weighed against their envelopes. */
   async function fetchProjects() {
     if (!plan.value) {
@@ -791,7 +754,6 @@
         fetchStatistics(),
         fetchPlanCount(),
         checkYearAgoAvailability(),
-        fetchExceptionalTags(),
         fetchProjects(),
       ])
     } catch (err) {
@@ -1082,6 +1044,15 @@
     }
   }
 
+  // A comparison is a planning question: it only exists while the envelopes
+  // are being set. Leaving edit mode, by « Annuler », « Enregistrer » or a
+  // new plan, drops it, so the Historique column is never on in tracking.
+  watch(isEditing, editing => {
+    if (editing) return
+    comparisonPreset.value = 'none'
+    comparisonRange.value = null
+  })
+
   watch(
     [comparisonRange, deductReimbursements, deductPendingReimbursements],
     () => {
@@ -1100,7 +1071,41 @@
       :is-editing="isEditing"
       @open-history="isHistoryOpen = true"
       @create="openCreateModal"
-    />
+    >
+      <template #actions>
+        <!-- The same reading as the dashboard's, behind the same button. -->
+        <ReadingMenu
+          v-model:breakdown-mode="breakdownMode"
+          v-model:deduct-reimbursements="deductReimbursements"
+          v-model:deduct-pending-reimbursements="deductPendingReimbursements"
+          :has-exceptional-expenses="hasExceptionalInPlan"
+          :has-amortized-expenses="hasAmortizedInPlan"
+          :pending-sync-error="filtersStore.lastSyncError"
+        />
+      </template>
+    </BudgetPlanHeader>
+
+    <!-- A switch or a comparison refetches the figures: said in a line
+         under the header while it runs, and with a retry when it fails. -->
+    <p
+      v-if="plan && isRefreshingStatistics"
+      role="status"
+      data-testid="budget-statistics-refreshing"
+      class="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-400"
+    >
+      Mise à jour des chiffres…
+    </p>
+    <InlineAlert
+      v-else-if="plan && statisticsError"
+      class="mb-6"
+      data-testid="budget-statistics-error"
+      retry-label="Réessayer"
+      retry-test-id="budget-statistics-retry"
+      @retry="refreshStatistics"
+    >
+      Les chiffres n’ont pas pu être mis à jour : ils correspondent encore aux
+      réglages précédents. {{ statisticsError }}
+    </InlineAlert>
 
     <!-- Error banner -->
     <div
@@ -1175,85 +1180,6 @@
 
     <!-- Plan content -->
     <template v-else>
-      <!-- Filters card: reference period + reimbursement toggles -->
-      <BaseCard bordered data-testid="budget-filters-card" class="mb-6">
-        <div class="flex flex-col gap-3">
-          <ComparisonSelector
-            :plan="plan"
-            :year-ago-available="yearAgoAvailable"
-            :preset="comparisonPreset"
-            :custom-start-date="comparisonCustomStart"
-            :custom-end-date="comparisonCustomEnd"
-            @update:preset="comparisonPreset = $event"
-            @update:custom-start-date="comparisonCustomStart = $event"
-            @update:custom-end-date="comparisonCustomEnd = $event"
-            @update:range="comparisonRange = $event"
-          />
-
-          <div
-            class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
-          >
-            <label
-              for="budget-deduct-reimbursements"
-              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-            >
-              <ToggleSwitch
-                id="budget-deduct-reimbursements"
-                :checked="deductReimbursements"
-                label="Déduire les remboursements reçus"
-                @change="deductReimbursements = $event"
-              />
-              <span
-                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-              >
-                <span class="sm:hidden">Déduire les remb. reçus</span>
-                <span class="hidden sm:inline"
-                  >Déduire les remboursements reçus</span
-                >
-              </span>
-            </label>
-            <label
-              for="budget-deduct-pending"
-              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-            >
-              <ToggleSwitch
-                id="budget-deduct-pending"
-                :checked="deductPendingReimbursements"
-                label="Déduire les remboursements en attente"
-                @change="deductPendingReimbursements = $event"
-              />
-              <span
-                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-              >
-                <span class="sm:hidden">Déduire les remb. en attente</span>
-                <span class="hidden sm:inline"
-                  >Déduire les remboursements en attente</span
-                >
-              </span>
-            </label>
-          </div>
-
-          <p
-            v-if="isRefreshingStatistics"
-            role="status"
-            data-testid="budget-statistics-refreshing"
-            class="text-xs text-gray-500 dark:text-gray-400"
-          >
-            Mise à jour des chiffres…
-          </p>
-          <InlineAlert
-            v-else-if="statisticsError"
-            data-testid="budget-statistics-error"
-            retry-label="Réessayer"
-            retry-test-id="budget-statistics-retry"
-            @retry="refreshStatistics"
-          >
-            Les chiffres n'ont pas pu être mis à jour : ils correspondent encore
-            aux réglages précédents. {{ statisticsError }}
-          </InlineAlert>
-        </div>
-      </BaseCard>
-
       <!-- The verdict first — « am I on track » is what the page is opened
            for — then the chart it is read from. -->
       <div class="mb-6">
@@ -1315,19 +1241,29 @@
           :complete-months-count="comparison.completePlanMonthsCount.value"
           :actual-period-label="actualPeriodLabel"
           :plan-is-past="planStatus(plan) === 'past'"
-          :has-exceptional="hasExceptionalInPlan"
-          :breakdown-mode="breakdownMode"
-          :plan-events="planEvents"
-          :has-amortized="hasAmortizedInPlan"
           :averages-source="averagesSource"
           @enter-edit="enterEditMode"
           @select-month="selectMonth"
           @apply-averages="applyAverageToAll"
           @adjust-percent="adjustAllByPercent"
           @reset="resetAllBudgets"
-          @set-mode="setBreakdownMode"
-          @open-tag="openTagAnalysis"
-        />
+        >
+          <!-- « Comparer avec »: in edit mode only, the envelopes being set
+               against a past. -->
+          <template v-if="isEditing" #comparison>
+            <ComparisonSelector
+              :plan="plan"
+              :year-ago-available="yearAgoAvailable"
+              :preset="comparisonPreset"
+              :custom-start-date="comparisonCustomStart"
+              :custom-end-date="comparisonCustomEnd"
+              @update:preset="comparisonPreset = $event"
+              @update:custom-start-date="comparisonCustomStart = $event"
+              @update:custom-end-date="comparisonCustomEnd = $event"
+              @update:range="comparisonRange = $event"
+            />
+          </template>
+        </BudgetTableControls>
 
         <BudgetProjectsSection
           :projects="projects"
