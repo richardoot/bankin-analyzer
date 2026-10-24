@@ -13,6 +13,7 @@
   import BaseCard from '@/components/ui/BaseCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
+  import { useMediaQuery } from '@/composables/useMediaQuery'
 
   /**
    * « Ce mois-ci » (agent-os/product/dashboard-refonte.md, lot 1): the
@@ -173,6 +174,13 @@
   })
 
   const showSkeleton = computed(() => props.isLoading && !props.data)
+
+  /**
+   * Below `sm` the tiles stand two by two: a 390px phone leaves a tile
+   * about 130px inside, a 360px one less — the sparkline narrows with it.
+   */
+  const isPhone = useMediaQuery('(max-width: 639.98px)')
+  const sparkWidth = computed(() => (isPhone.value ? 100 : 120))
 </script>
 
 <template>
@@ -181,7 +189,7 @@
     data-testid="month-band"
     aria-labelledby="month-band-title"
   >
-    <header class="mb-4">
+    <header class="mb-3 sm:mb-4">
       <h2
         id="month-band-title"
         class="text-lg font-semibold text-gray-900 dark:text-gray-100"
@@ -189,7 +197,7 @@
       >
         {{ title }}
       </h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400">
+      <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
         L'habitude est la médiane des six mois clos précédents
       </p>
     </header>
@@ -233,21 +241,23 @@
       <!-- Spent to date, against the habit at this point of the month. -->
       <article
         v-if="spentTile"
-        class="flex min-w-0 flex-col gap-1.5 rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-slate-700"
+        class="flex min-w-0 flex-col gap-1 rounded-lg sm:gap-1.5 border border-gray-200 p-3 sm:p-4 dark:border-slate-700"
         data-testid="month-tile-spent"
       >
         <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
           {{ spentTile.label }}
         </h3>
         <p
-          class="text-2xl font-semibold text-gray-900 tabular-nums dark:text-gray-100"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100"
           data-testid="month-value-spent"
         >
           {{ euros(data.spent) }}
         </p>
-        <p class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+        <p
+          class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] sm:text-xs"
+        >
           <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
+            class="inline-flex max-w-full items-center rounded-md px-2 py-0.5 font-semibold tabular-nums sm:rounded-full sm:whitespace-nowrap"
             :class="STATE_BADGE_CLASSES[spentTile.tone]"
             :data-tone="spentTile.tone"
             data-testid="month-badge-spent"
@@ -260,7 +270,7 @@
           >
         </p>
         <p
-          class="text-xs text-gray-500 tabular-nums dark:text-gray-400"
+          class="text-[11px] sm:text-xs text-gray-500 tabular-nums dark:text-gray-400"
           data-testid="month-detail-spent"
         >
           {{ spentTile.detail }}
@@ -272,7 +282,7 @@
           baseline="zero"
           :color="DATA_HUE"
           :end-color="STATE_COLORS[spentTile.tone]"
-          :width="120"
+          :width="sparkWidth"
           :label="`${spentTile.label} des mois clos et du mois en cours`"
           data-testid="month-sparkline-spent"
         />
@@ -281,21 +291,21 @@
       <!-- Income received to date. -->
       <article
         v-if="incomeTile"
-        class="flex min-w-0 flex-col gap-1.5 rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-slate-700"
+        class="flex min-w-0 flex-col gap-1 rounded-lg sm:gap-1.5 border border-gray-200 p-3 sm:p-4 dark:border-slate-700"
         data-testid="month-tile-income"
       >
         <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
           Revenus
         </h3>
         <p
-          class="text-2xl font-semibold text-gray-900 tabular-nums dark:text-gray-100"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100"
           data-testid="month-value-income"
         >
           {{ euros(data.incomeReceived) }}
         </p>
-        <p class="text-xs">
+        <p class="text-[11px] sm:text-xs">
           <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
+            class="inline-flex max-w-full items-center rounded-md px-2 py-0.5 font-semibold tabular-nums sm:rounded-full sm:whitespace-nowrap"
             :class="STATE_BADGE_CLASSES.neutral"
             data-tone="neutral"
             data-testid="month-badge-income"
@@ -304,7 +314,7 @@
         </p>
         <p
           v-if="incomeTile.detail"
-          class="text-xs text-gray-500 tabular-nums dark:text-gray-400"
+          class="text-[11px] sm:text-xs text-gray-500 tabular-nums dark:text-gray-400"
         >
           {{ incomeTile.detail }}
         </p>
@@ -315,7 +325,7 @@
           baseline="zero"
           :color="DATA_HUE"
           :end-color="STATE_COLORS.neutral"
-          :width="120"
+          :width="sparkWidth"
           label="Revenus des mois clos"
           data-testid="month-sparkline-income"
         />
@@ -324,21 +334,21 @@
       <!-- What the active recurrences still charge this month. -->
       <article
         v-if="upcomingTile"
-        class="flex min-w-0 flex-col gap-1.5 rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-slate-700"
+        class="flex min-w-0 flex-col gap-1 rounded-lg sm:gap-1.5 border border-gray-200 p-3 sm:p-4 dark:border-slate-700"
         data-testid="month-tile-upcoming"
       >
         <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
           À venir
         </h3>
         <p
-          class="text-2xl font-semibold text-gray-900 tabular-nums dark:text-gray-100"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100"
           data-testid="month-value-upcoming"
         >
           {{ euros(data.upcomingTotal) }}
         </p>
-        <p class="text-xs">
+        <p class="text-[11px] sm:text-xs">
           <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
+            class="inline-flex max-w-full items-center rounded-md px-2 py-0.5 font-semibold tabular-nums sm:rounded-full sm:whitespace-nowrap"
             :class="STATE_BADGE_CLASSES.neutral"
             data-tone="neutral"
             data-testid="month-badge-upcoming"
@@ -347,7 +357,7 @@
         </p>
         <ul
           v-if="upcomingTile.names.length > 0"
-          class="text-xs text-gray-500 dark:text-gray-400"
+          class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400"
           data-testid="month-upcoming-names"
         >
           <li
@@ -368,7 +378,7 @@
         </ul>
         <RouterLink
           to="/recurrences"
-          class="mt-auto pt-1 text-xs font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
+          class="relative mt-auto self-start pt-1 text-[11px] font-medium text-primary-700 sm:text-xs pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
           data-testid="month-link-recurrences"
         >
           Les récurrences →
@@ -378,14 +388,14 @@
       <!-- What is left: expected income − spent − still to come. -->
       <article
         v-if="remainingTile"
-        class="flex min-w-0 flex-col gap-1.5 rounded-lg border border-teal-100 bg-teal-50/60 p-3 sm:p-4 dark:border-teal-900/50 dark:bg-teal-900/10"
+        class="flex min-w-0 flex-col gap-1 rounded-lg sm:gap-1.5 border border-teal-100 bg-teal-50/60 p-3 sm:p-4 dark:border-teal-900/50 dark:bg-teal-900/10"
         data-testid="month-tile-remaining"
       >
         <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
           Reste à vivre
         </h3>
         <p
-          class="text-2xl font-semibold tabular-nums"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl tabular-nums"
           :class="
             remainingTile.overspent
               ? 'text-amber-700 dark:text-amber-400'
@@ -397,9 +407,9 @@
             data.remainingToLive === null ? '—' : euros(data.remainingToLive)
           }}
         </p>
-        <p v-if="remainingTile.badge" class="text-xs">
+        <p v-if="remainingTile.badge" class="text-[11px] sm:text-xs">
           <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
+            class="inline-flex max-w-full items-center rounded-md px-2 py-0.5 font-semibold tabular-nums sm:rounded-full sm:whitespace-nowrap"
             :class="
               remainingTile.overspent
                 ? STATE_BADGE_CLASSES.over
@@ -410,7 +420,7 @@
             >{{ remainingTile.badge }}</span
           >
         </p>
-        <p class="text-xs text-gray-500 dark:text-gray-400">
+        <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
           Revenus attendus − dépensé − à venir
         </p>
       </article>

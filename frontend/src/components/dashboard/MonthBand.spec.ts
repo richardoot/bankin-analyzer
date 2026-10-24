@@ -1,9 +1,19 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { ref } from 'vue'
 import { mount, enableAutoUnmount, RouterLinkStub } from '@vue/test-utils'
 import type { DashboardMonthDto } from '@/lib/api'
 import MonthBand from './MonthBand.vue'
 
+const phone = vi.hoisted(() => ({ value: false }))
+vi.mock('@/composables/useMediaQuery', () => ({
+  useMediaQuery: () => ref(phone.value),
+}))
+
 enableAutoUnmount(afterEach)
+
+afterEach(() => {
+  phone.value = false
+})
 
 /** October 2026 on its 23rd: 1 000 € spent against a 1 625 € habit. */
 const OCTOBER: DashboardMonthDto = {
@@ -335,6 +345,44 @@ describe('MonthBand', () => {
       expect(wrapper.find('[data-testid="month-tile-spent"]').exists()).toBe(
         true
       )
+    })
+  })
+
+  describe('on a phone', () => {
+    it('stands the tiles two by two, the figures at 22px, the notes at 11px', () => {
+      phone.value = true
+      const wrapper = mountBand()
+
+      const grid = wrapper.get('[data-testid="month-tile-spent"]').element
+        .parentElement as HTMLElement
+      expect(grid.className).toContain('grid-cols-2')
+      expect(grid.className).toContain('md:grid-cols-4')
+      const value = wrapper.get('[data-testid="month-value-spent"]')
+      expect(value.classes()).toEqual(
+        expect.arrayContaining(['text-[22px]', 'sm:text-2xl'])
+      )
+      expect(
+        wrapper.get('[data-testid="month-detail-spent"]').classes()
+      ).toEqual(expect.arrayContaining(['text-[11px]', 'sm:text-xs']))
+    })
+
+    it('narrows the sparklines to the tile', () => {
+      phone.value = true
+      const wrapper = mountBand()
+
+      for (const id of ['month-sparkline-spent', 'month-sparkline-income']) {
+        expect(wrapper.get(`[data-testid="${id}"]`).attributes('width')).toBe(
+          '100'
+        )
+      }
+    })
+
+    it('keeps the 120px sparklines on a desk', () => {
+      const wrapper = mountBand()
+
+      expect(
+        wrapper.get('[data-testid="month-sparkline-spent"]').attributes('width')
+      ).toBe('120')
     })
   })
 })
