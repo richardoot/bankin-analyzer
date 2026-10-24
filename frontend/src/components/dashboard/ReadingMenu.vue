@@ -149,7 +149,7 @@
 <template>
   <div
     ref="root"
-    class="relative inline-block"
+    class="relative inline-block max-w-full"
     data-testid="reading-menu"
     @focusout="onFocusOut"
     @keydown.esc.stop="!isPhone && close(true)"
