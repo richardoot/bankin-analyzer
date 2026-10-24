@@ -8,6 +8,7 @@ import { useFiltersStore } from '@/stores/filters'
 import { useAccountsStore } from '@/stores/accounts'
 import { isAmortizationCarrier } from '@/lib/amortization'
 import { formatMonthRange } from '@/lib/formatters'
+import type { BreakdownMode } from './useBudgetComparison'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -23,21 +24,11 @@ export interface MonthlyData {
 
 /**
  * The two readings of a period: as it was (« Tout »), or the lifestyle
- * once the exceptional events are set aside (« Vie courante »).
+ * once the exceptional events are set aside (« Vie courante »). Defined
+ * once, with the budget's comparison; re-exported for the dashboard's
+ * components.
  */
-export type BreakdownMode = 'real' | 'everyday'
-
-const BREAKDOWN_MODE_KEY = 'dashboard-breakdown-mode'
-
-function readStoredBreakdownMode(): BreakdownMode {
-  try {
-    return localStorage.getItem(BREAKDOWN_MODE_KEY) === 'real'
-      ? 'real'
-      : 'everyday'
-  } catch {
-    return 'everyday'
-  }
-}
+export type { BreakdownMode }
 
 export function useDashboardData() {
   const filtersStore = useFiltersStore()
@@ -45,21 +36,15 @@ export function useDashboardData() {
 
   /**
    * One reading for the whole page — the month band, the
-   * structure card and the category list follow it together. Persisted:
-   * it is a way of looking at the figures, not a question of the moment.
-   * Defaults to « Vie courante », as the budget does: a holiday must not
-   * read as a jump in what the lifestyle costs.
+   * structure card and the category list follow it together — and for the
+   * trends and the budget too: it lives in the filters store, remembered in
+   * this browser. Defaults to « Vie courante »: a holiday must not read as
+   * a jump in what the lifestyle costs. Writable, for the menu's v-model.
    */
-  const breakdownMode = ref<BreakdownMode>(readStoredBreakdownMode())
-
-  function setBreakdownMode(mode: BreakdownMode): void {
-    breakdownMode.value = mode
-    try {
-      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
-    } catch {
-      // Private browsing: the choice simply does not persist.
-    }
-  }
+  const breakdownMode = computed<BreakdownMode>({
+    get: () => filtersStore.breakdownMode,
+    set: mode => filtersStore.setBreakdownMode(mode),
+  })
 
   // Pre-aggregated data from backend
   const summaryData = ref<DashboardSummaryDto | null>(null)
@@ -69,10 +54,14 @@ export function useDashboardData() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Reimbursement toggles. Received reimbursements are a reading of the
-  // screen; a debt still owed is a preference shared with the budget, kept
-  // by the backend, so the switch here reads and writes the store.
-  const deductReimbursements = ref(true)
+  // Reimbursement toggles, both read and written through the store.
+  // Received reimbursements are part of the reading, kept in this browser
+  // with Vie courante / Tout; a debt still owed is a preference shared with
+  // the budget, kept by the backend.
+  const deductReimbursements = computed<boolean>({
+    get: () => filtersStore.deductReimbursements,
+    set: value => filtersStore.setDeductReimbursements(value),
+  })
   const deductPendingReimbursements = computed<boolean>({
     get: () => filtersStore.deductPendingReimbursements,
     set: value => {
@@ -324,7 +313,7 @@ export function useDashboardData() {
       filtersStore.timePeriod,
       filtersStore.customStartDate,
       filtersStore.customEndDate,
-      deductReimbursements.value,
+      filtersStore.deductReimbursements,
       filtersStore.deductPendingReimbursements,
     ],
     () => {
@@ -349,7 +338,6 @@ export function useDashboardData() {
   return {
     hasLoaded,
     breakdownMode,
-    setBreakdownMode,
     displayedTotalExpenses,
     pendingPreferenceSyncError,
     monthlyData,

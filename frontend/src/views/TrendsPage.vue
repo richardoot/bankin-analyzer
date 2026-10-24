@@ -13,23 +13,18 @@
    * window, the tabs, the paragraph and the horizons live here; the
    * dashboard keeps the lead sentence and three tiles.
    *
-   * The reading and the switches come from the same owners as on the
-   * dashboard: the reading from useDashboardData (remembered in this
-   * browser), the « en attente » switch from the filters store. The summary
-   * itself is never asked here: useDashboardData only fetches when told to.
+   * The reading and the switches come from the same owner as on the
+   * dashboard and the budget, the filters store, through useDashboardData:
+   * the reading and « reçus » remembered in this browser, « en attente »
+   * kept by the backend. The summary itself is never asked here:
+   * useDashboardData only fetches when told to.
    */
   const {
     breakdownMode,
-    setBreakdownMode,
     deductReimbursements,
     deductPendingReimbursements,
     pendingPreferenceSyncError,
   } = useDashboardData()
-
-  const breakdownModeModel = computed({
-    get: () => breakdownMode.value,
-    set: setBreakdownMode,
-  })
 
   const subtitle = computed(() =>
     breakdownMode.value === 'everyday'
@@ -59,7 +54,7 @@
         <!-- The same reading as the dashboard's. Events may touch any
              month read here: the choice is always offered. -->
         <ReadingMenu
-          v-model:breakdown-mode="breakdownModeModel"
+          v-model:breakdown-mode="breakdownMode"
           v-model:deduct-reimbursements="deductReimbursements"
           v-model:deduct-pending-reimbursements="deductPendingReimbursements"
           :has-exceptional-expenses="true"

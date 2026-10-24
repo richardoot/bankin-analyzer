@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useDashboardData } from './useDashboardData'
+import type { BreakdownMode } from './useDashboardData'
 import { api } from '@/lib/api'
 import type { DashboardSummaryDto } from '@/lib/api'
 
@@ -12,15 +13,45 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    deductPendingReimbursements: false,
-    setDeductPendingReimbursements: vi.fn(),
-    timePeriod: 'all',
-    setTimePeriod: vi.fn(),
-    getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
-  }),
+// The reading lives in the store: a reactive stand-in, reset before each test.
+const reading = vi.hoisted(() => ({
+  breakdownMode: 'everyday' as 'everyday' | 'real',
+  deductReimbursements: true,
+  setBreakdownMode: (() => {}) as (mode: 'everyday' | 'real') => void,
+  setDeductReimbursements: (() => {}) as (value: boolean) => void,
 }))
+vi.mock('@/stores/filters', async () => {
+  const { reactive: makeReactive } = await import('vue')
+  const state = makeReactive(reading)
+  state.setBreakdownMode = mode => {
+    state.breakdownMode = mode
+  }
+  state.setDeductReimbursements = value => {
+    state.deductReimbursements = value
+  }
+  return {
+    useFiltersStore: () => ({
+      get breakdownMode() {
+        return state.breakdownMode
+      },
+      setBreakdownMode: state.setBreakdownMode,
+      get deductReimbursements() {
+        return state.deductReimbursements
+      },
+      setDeductReimbursements: state.setDeductReimbursements,
+      deductPendingReimbursements: false,
+      setDeductPendingReimbursements: vi.fn(),
+      timePeriod: 'all',
+      setTimePeriod: vi.fn(),
+      getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
+    }),
+  }
+})
+
+beforeEach(() => {
+  reading.breakdownMode = 'everyday'
+  reading.deductReimbursements = true
+})
 
 // Configurable mock for accounts store
 let mockAccountDivisors: Record<string, number> = {}
@@ -321,31 +352,46 @@ describe('useDashboardData', () => {
       expect(exceptionalEvents.value[0]?.name).toBe('Vacances Italie')
     })
 
-    it('carries one reading for the whole page, persisted, everyday by default', async () => {
-      vi.mocked(localStorage.getItem).mockReturnValue(null)
+    it('reads and writes the reading of the filters store, everyday by default', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
 
-      const {
-        fetchData,
-        breakdownMode,
-        setBreakdownMode,
-        displayedTotalExpenses,
-      } = useDashboardData()
+      const { fetchData, breakdownMode, displayedTotalExpenses } =
+        useDashboardData()
       await fetchData()
 
       expect(breakdownMode.value).toBe('everyday')
       expect(displayedTotalExpenses.value).toBe(1600)
 
-      setBreakdownMode('real')
+      // Written through the store, never in a key of its own.
+      breakdownMode.value = 'real'
+      expect(reading.breakdownMode).toBe('real')
       expect(displayedTotalExpenses.value).toBe(2200)
-      expect(localStorage.setItem).toHaveBeenCalledWith(
-        'dashboard-breakdown-mode',
-        'real'
+      expect(localStorage.setItem).not.toHaveBeenCalled()
+
+      // Whoever else sets the store's reading, the page follows.
+      reading.setBreakdownMode('everyday')
+      expect(displayedTotalExpenses.value).toBe(1600)
+      // A fresh composable reads the same choice.
+      const mode: BreakdownMode = useDashboardData().breakdownMode.value
+      expect(mode).toBe('everyday')
+    })
+
+    it('refetches when the received-reimbursements switch of the store moves', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+
+      const { fetchData, deductReimbursements } = useDashboardData()
+      await fetchData()
+      expect(api.getDashboardSummary).toHaveBeenLastCalledWith(
+        expect.objectContaining({ deductReimbursements: true })
       )
 
-      // A fresh composable reads the choice back.
-      vi.mocked(localStorage.getItem).mockReturnValue('real')
-      expect(useDashboardData().breakdownMode.value).toBe('real')
+      deductReimbursements.value = false
+      expect(reading.deductReimbursements).toBe(false)
+      await vi.waitFor(() =>
+        expect(api.getDashboardSummary).toHaveBeenLastCalledWith(
+          expect.objectContaining({ deductReimbursements: false })
+        )
+      )
     })
 
     it('reports no exceptional spending when there is none', async () => {
@@ -378,14 +424,14 @@ describe('useDashboardData', () => {
         fetchData,
         hasExceptionalExpenses,
         displayedTotalExpenses,
-        setBreakdownMode,
+        breakdownMode,
       } = useDashboardData()
       await fetchData()
 
       expect(hasExceptionalExpenses.value).toBe(false)
       // With no event, both readings are strictly identical.
       expect(displayedTotalExpenses.value).toBe(1600)
-      setBreakdownMode('real')
+      breakdownMode.value = 'real'
       expect(displayedTotalExpenses.value).toBe(1600)
     })
 
@@ -502,7 +548,7 @@ describe('useDashboardData — smoothed purchases', () => {
     expect(data.monthlyData.value).toHaveLength(3)
     expect(data.expenseCategoriesDetailed.value).toHaveLength(2)
 
-    data.setBreakdownMode('real')
+    data.breakdownMode.value = 'real'
     expect(data.monthlyData.value.map(m => m.month)).toEqual([
       '2024-01',
       '2024-02',

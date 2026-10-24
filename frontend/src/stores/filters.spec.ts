@@ -58,6 +58,133 @@ describe('useFiltersStore', () => {
     })
   })
 
+  describe('the reading', () => {
+    /** Storage as a key → value map, for the tests that read several keys. */
+    function storageOf(entries: Record<string, string>) {
+      vi.mocked(localStorage.getItem).mockImplementation(
+        key => entries[key] ?? null
+      )
+    }
+
+    function lastReadingSaved(): unknown {
+      const call = vi
+        .mocked(localStorage.setItem)
+        .mock.calls.filter(([key]) => key === 'reading')
+        .at(-1)
+      return call ? JSON.parse(call[1]) : undefined
+    }
+
+    beforeEach(() => {
+      vi.mocked(localStorage.removeItem).mockClear()
+    })
+
+    it('reads Vie courante, received reimbursements taken off, by default', () => {
+      const store = useFiltersStore()
+
+      expect(store.breakdownMode).toBe('everyday')
+      expect(store.deductReimbursements).toBe(true)
+      // Nothing to migrate: nothing written.
+      expect(lastReadingSaved()).toBeUndefined()
+    })
+
+    it('keeps both choices under the one « reading » key, in this browser only', () => {
+      const store = useFiltersStore()
+
+      store.setBreakdownMode('real')
+      expect(lastReadingSaved()).toEqual({
+        breakdownMode: 'real',
+        deductReimbursements: true,
+      })
+
+      store.setDeductReimbursements(false)
+      expect(store.deductReimbursements).toBe(false)
+      expect(lastReadingSaved()).toEqual({
+        breakdownMode: 'real',
+        deductReimbursements: false,
+      })
+      expect(updateFilterPreferences).not.toHaveBeenCalled()
+    })
+
+    it('comes back from the « reading » key, and ignores what it does not know', () => {
+      storageOf({
+        reading: JSON.stringify({
+          breakdownMode: 'real',
+          deductReimbursements: false,
+        }),
+      })
+      const store = useFiltersStore()
+      expect(store.breakdownMode).toBe('real')
+      expect(store.deductReimbursements).toBe(false)
+
+      setActivePinia(createPinia())
+      storageOf({
+        reading: JSON.stringify({
+          breakdownMode: 'tout',
+          deductReimbursements: 'non',
+        }),
+      })
+      const fallback = useFiltersStore()
+      expect(fallback.breakdownMode).toBe('everyday')
+      expect(fallback.deductReimbursements).toBe(true)
+
+      setActivePinia(createPinia())
+      storageOf({ reading: '{not json' })
+      expect(useFiltersStore().breakdownMode).toBe('everyday')
+    })
+
+    it('migrates the dashboard’s old key once, then erases it', () => {
+      storageOf({ 'dashboard-breakdown-mode': 'real' })
+
+      const store = useFiltersStore()
+
+      expect(store.breakdownMode).toBe('real')
+      expect(store.deductReimbursements).toBe(true)
+      expect(lastReadingSaved()).toEqual({
+        breakdownMode: 'real',
+        deductReimbursements: true,
+      })
+      expect(localStorage.removeItem).toHaveBeenCalledWith(
+        'dashboard-breakdown-mode'
+      )
+    })
+
+    it('prefers the « reading » key to the old one, and erases the old one too', () => {
+      storageOf({
+        reading: JSON.stringify({
+          breakdownMode: 'everyday',
+          deductReimbursements: true,
+        }),
+        'dashboard-breakdown-mode': 'real',
+      })
+
+      expect(useFiltersStore().breakdownMode).toBe('everyday')
+      expect(localStorage.removeItem).toHaveBeenCalledWith(
+        'dashboard-breakdown-mode'
+      )
+    })
+
+    it('ignores and erases the budget’s old key', () => {
+      storageOf({ 'budget-breakdown-mode': 'real' })
+
+      const store = useFiltersStore()
+
+      expect(store.breakdownMode).toBe('everyday')
+      expect(lastReadingSaved()).toBeUndefined()
+      expect(localStorage.removeItem).toHaveBeenCalledWith(
+        'budget-breakdown-mode'
+      )
+    })
+
+    it('still reads, by default, when the storage refuses the key', () => {
+      vi.mocked(localStorage.getItem).mockImplementation(key => {
+        if (key === 'reading') throw new Error('SecurityError')
+        return null
+      })
+
+      expect(useFiltersStore().breakdownMode).toBe('everyday')
+    })
+  })
+
   describe('a debt still owed', () => {
     it('is taken off the spending until the user says otherwise', () => {
       const store = useFiltersStore()
