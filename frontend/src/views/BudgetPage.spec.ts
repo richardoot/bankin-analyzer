@@ -3358,21 +3358,22 @@ describe('BudgetPage', () => {
         .findAll('[data-testid^="todo-item-"]')
         .map(a => a.attributes('data-testid'))
 
-    it('sits between the band and the table, in the plan’s order', async () => {
+    it('sits at the foot of the page, after the envelopes, in the plan’s order', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
       const card = wrapper.get('[data-testid="todo-card"]')
       const band = wrapper.get('[data-testid="budget-month-band"]')
       const table = wrapper.get('[data-testid="budget-table"]')
-      expect(
-        band.element.compareDocumentPosition(card.element) &
-          Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy()
-      expect(
-        card.element.compareDocumentPosition(table.element) &
-          Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy()
+      const folded = wrapper.get('[data-testid="budget-folded-lines"]')
+      const follows = (a: Element, b: Element) =>
+        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      expect(follows(band.element, table.element)).toBe(true)
+      expect(follows(table.element, card.element)).toBe(true)
+      // After the folded lines too: the projects, the smoothed purchases,
+      // the month-by-month grid.
+      expect(follows(folded.element, card.element)).toBe(true)
+      expect(folded.element.contains(card.element)).toBe(false)
 
       expect(keysOf(wrapper)).toEqual([
         'todo-item-envelope-cat-food',

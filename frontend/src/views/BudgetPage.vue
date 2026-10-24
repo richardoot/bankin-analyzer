@@ -1518,11 +1518,6 @@
         @edit="enterEditMode({ focusIncome: true })"
       />
 
-      <!-- « À faire »: an envelope over, the project reserve overdrawn, a
-           category without an envelope, the next plan. The dashboard's card;
-           nothing rendered when nothing is to do, nor while editing. -->
-      <TodoCard v-if="!isEditing" class="mb-6" :items="budgetTodoItems" />
-
       <!-- Expense category list -->
       <BaseCard bordered>
         <BudgetTableControls
@@ -1751,6 +1746,12 @@
           </details>
         </div>
       </BaseCard>
+
+      <!-- « À faire » at the foot of the page (Richard, 2026-10-24): an
+           envelope over, the project reserve overdrawn, a category without
+           an envelope, the next plan. The dashboard's card; nothing
+           rendered when nothing is to do, nor while editing. -->
+      <TodoCard v-if="!isEditing" class="mt-6" :items="budgetTodoItems" />
 
       <BudgetEditBar
         v-if="isEditing || saveStatus === 'saved'"
