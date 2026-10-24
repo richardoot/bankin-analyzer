@@ -1889,6 +1889,9 @@ describe('BudgetPage', () => {
     })
 
     it('weighs the planned savings against the decided ones in the band, not the header', async () => {
+      // « Ce mois-ci » reads a running plan: a finished one reads its review.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T12:00:00Z'))
       vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
         ...samplePlan,
         savingsTarget: 1900,
@@ -1918,6 +1921,8 @@ describe('BudgetPage', () => {
     })
 
     it('says a plan created without a reference income, with the way to edit it', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T12:00:00Z'))
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
@@ -3007,6 +3012,198 @@ describe('BudgetPage', () => {
       expect(
         wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
       ).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
+  describe('a finished plan (« Bilan du plan »)', () => {
+    /**
+     * « Printemps 2026 », January → March, read on 20 October: the plan is
+     * over, no other runs. Alimentation spends past its envelope on
+     * average, Transport holds.
+     */
+    const planSpring: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-spring',
+      name: 'Printemps 2026',
+      startDate: '2026-01-01',
+      endDate: '2026-03-31',
+      monthCount: 3,
+      totalAmount: 350,
+      projectReserve: 100,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          amount: 300,
+        },
+        {
+          id: 'e2',
+          categoryId: 'cat-transport',
+          categoryName: 'Transport',
+          categoryIcon: '🚗',
+          amount: 50,
+        },
+      ],
+    }
+
+    const springStatistics: BudgetStatisticsDto = {
+      ...sampleStatistics,
+      periodMonths: 3,
+      monthLabels: ['2026-01', '2026-02', '2026-03'],
+      expensesByCategory: [
+        {
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          totalAmount: 1100,
+          transactionCount: 12,
+          averagePerMonth: 366.67,
+          monthlyAmounts: [350, 400, 350],
+        },
+        {
+          categoryId: 'cat-transport',
+          categoryName: 'Transport',
+          categoryIcon: '🚗',
+          totalAmount: 120,
+          transactionCount: 3,
+          averagePerMonth: 40,
+          monthlyAmounts: [40, 40, 40],
+        },
+      ],
+      incomeByCategory: [
+        {
+          categoryId: 'cat-salary',
+          categoryName: 'Salaire',
+          totalAmount: 3000,
+          transactionCount: 3,
+          averagePerMonth: 1000,
+          monthlyAmounts: [1000, 1000, 1000],
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-10-20T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planSpring)
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([])
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(springStatistics)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const flat = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
+    it('reads the review in place of « Ce mois-ci », the whole plan by default', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        false
+      )
+      const band = wrapper.get('[data-testid="budget-review-band"]')
+      expect(band.get('[data-testid="budget-review-title"]').text()).toBe(
+        'Bilan du plan · Printemps 2026'
+      )
+      expect(
+        band
+          .get('[data-testid="budget-month-average"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      // (390 + 440 + 390) / 3 ≈ 407 a month on 350 €.
+      expect(
+        flat(band.get('[data-testid="budget-month-value-spent"]').text())
+      ).toBe('407 € par mois')
+      // 1 000 − 407 ≈ 593 a month.
+      expect(
+        flat(band.get('[data-testid="budget-month-value-savings"]').text())
+      ).toBe('593 € par mois')
+      expect(
+        flat(band.get('[data-testid="budget-month-value-envelopes"]').text())
+      ).toBe('1 sur 2')
+      expect(band.get('[data-testid="budget-badge-envelopes"]').text()).toBe(
+        'Alimentation'
+      )
+      expect(
+        flat(band.get('[data-testid="budget-month-value-projects"]').text())
+      ).toBe('0 € sur 100 €')
+      wrapper.unmount()
+    })
+
+    it('reads one of its months once chosen in « Mois lu »', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="budget-month-2026-02"]').trigger('click')
+      await flushPromises()
+
+      const band = wrapper.get('[data-testid="budget-review-band"]')
+      expect(
+        flat(band.get('[data-testid="budget-month-value-spent"]').text())
+      ).toBe('440 €')
+      expect(
+        band
+          .get('[data-testid="budget-month-2026-02"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      // « À faire » still says the plan's average, not the month read.
+      expect(
+        wrapper
+          .find('[data-testid="todo-item-envelopes-over-average"]')
+          .exists()
+      ).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('asks for the next plan, then names the envelopes over on average', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      expect(
+        wrapper
+          .findAll('[data-testid^="todo-item-"]')
+          .map(a => a.attributes('data-testid'))
+      ).toEqual([
+        'todo-item-no-current-plan',
+        'todo-item-envelopes-over-average',
+      ])
+      const line = wrapper.get(
+        '[data-testid="todo-item-envelopes-over-average"]'
+      )
+      expect(line.text()).toContain(
+        'Une enveloppe dépassée en moyenne : Alimentation'
+      )
+      expect(JSON.parse(line.attributes('data-to') ?? '{}')).toEqual({
+        hash: '#budget-envelopes-title',
+      })
+
+      // The anchor is the list's title: followed, it comes into view.
+      const title = document.getElementById('budget-envelopes-title')
+      expect(title).not.toBeNull()
+      const scroll = vi.fn()
+      if (title) title.scrollIntoView = scroll
+      liveRoute.hash = '#budget-envelopes-title'
+      await flushPromises()
+      expect(scroll).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('keeps « Ce mois-ci » while the plan runs', async () => {
+      vi.setSystemTime(new Date('2026-02-15T12:00:00Z'))
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(wrapper.find('[data-testid="budget-review-band"]').exists()).toBe(
+        false
+      )
       wrapper.unmount()
     })
   })

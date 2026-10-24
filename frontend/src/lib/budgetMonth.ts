@@ -240,3 +240,85 @@ export function budgetMonthReading(
     envelopesOver,
   }
 }
+
+/**
+ * « Bilan du plan » (agent-os/product/budget-refonte.md, lot 6): what the
+ * band of a finished plan says — the month reading of « Ce mois-ci », plus
+ * the plan's totals and the savings actually made on what is read.
+ */
+export interface BudgetReviewReading extends BudgetMonthReading {
+  /**
+   * How many months the reading covers: the plan's complete months on
+   * « Le plan », one on a month.
+   */
+  monthsCount: number
+  /** Spent over the months read: `spent × monthsCount`. */
+  spentTotal: number | null
+  /** The envelope over the months read: `envelope × monthsCount`. */
+  envelopeTotal: number
+  /** The income of the months read, per month; null without any month read. */
+  incomeRead: number | null
+  /** Income − spending, per month, on the months read; null without any. */
+  savingsRealized: number | null
+  /** `savingsRealized × monthsCount`. */
+  savingsRealizedTotal: number | null
+  /**
+   * The savings made against the decided ones: teal above, amber below,
+   * grey within ±5 %. Null without both figures.
+   */
+  savingsRealizedGap: { tone: StateTone; amount: number } | null
+  /** The envelopes held on the reading: `envelopesCount − envelopesOver`. */
+  envelopesHeld: number
+}
+
+/**
+ * The band of a finished plan: « Le plan » (`selectedMonth` null) reads the
+ * average of its complete months, a month reads that month — the same
+ * `budgetMonthReading`, completed with the plan's totals.
+ */
+export function budgetReviewReading(
+  input: BudgetMonthInput
+): BudgetReviewReading {
+  const reading = budgetMonthReading(input)
+  const completeCount = Math.min(input.completeMonthsCount, input.months.length)
+  const monthIndex =
+    input.selectedMonth === null
+      ? -1
+      : input.months.indexOf(input.selectedMonth)
+  const indices =
+    monthIndex >= 0
+      ? [monthIndex]
+      : input.months.slice(0, completeCount).map((_, i) => i)
+  const monthsCount = indices.length
+
+  const incomeRead =
+    monthsCount === 0 ? null : mean(indices.map(i => input.income[i] ?? 0))
+  const savingsRealized =
+    incomeRead === null || reading.spent === null
+      ? null
+      : incomeRead - reading.spent
+  const decided = reading.savingsDecided
+  const savingsRealizedGap =
+    savingsRealized !== null && decided !== null && decided > 0
+      ? {
+          tone: invertTone(gapOf(savingsRealized, decided).tone),
+          amount: savingsRealized - decided,
+        }
+      : null
+
+  return {
+    ...reading,
+    monthsCount,
+    spentTotal: reading.spent === null ? null : reading.spent * monthsCount,
+    envelopeTotal: reading.envelope * monthsCount,
+    incomeRead,
+    savingsRealized,
+    savingsRealizedTotal:
+      savingsRealized === null ? null : savingsRealized * monthsCount,
+    savingsRealizedGap,
+    envelopesHeld: Math.max(
+      0,
+      reading.envelopesCount - reading.envelopesOver.length
+    ),
+  }
+}
