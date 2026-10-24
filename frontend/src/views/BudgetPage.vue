@@ -1,6 +1,13 @@
 <script setup lang="ts">
   import PageShell from '@/components/ui/PageShell.vue'
-  import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+  import {
+    ref,
+    computed,
+    nextTick,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+  } from 'vue'
   import { api } from '@/lib/api'
   import type {
     AmortizedPurchaseDto,
@@ -40,7 +47,7 @@
     type ComparisonPreset,
     type ComparisonRange,
   } from '@/composables/useBudgetComparison'
-  import { useRouter, onBeforeRouteLeave } from 'vue-router'
+  import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
   import { formatMonth } from '@/lib/formatters'
   import { monthWindow, transactionsLink } from '@/lib/transactionsLink'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
@@ -48,9 +55,15 @@
   import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import { useSuppressTabBar } from '@/composables/useMobileNavigation'
+  import TodoCard from '@/components/dashboard/TodoCard.vue'
+  import {
+    budgetTodoItems as composeBudgetTodoItems,
+    categoriesWithoutEnvelope,
+  } from '@/lib/budgetTodo'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
+  const route = useRoute()
 
   // The reading — Vie courante or Tout, received reimbursements taken off
   // or not — is the one the dashboard and the trends read: kept by the
@@ -145,6 +158,13 @@
   const isHistoryOpen = ref(false)
   /** Total number of plans known to exist — drives the "Voir l'historique" hint on the empty state */
   const planCount = ref(0)
+  /**
+   * The windows of every plan known to exist: whether one runs today,
+   * when the plan shown is over (« À faire » then asks for the next one).
+   */
+  const planWindows = ref<{ id: string; startDate: string; endDate: string }[]>(
+    []
+  )
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function getBudgetForCategory(categoryId: string): number {
@@ -626,6 +646,80 @@
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  // ── « À faire » ──────────────────────────────────────────────────────────
+  // The plan's few things to do (lib/budgetTodo.ts), on the dashboard's
+  // card. Its lines link by route only: an anchor to a row or the projects
+  // line, or this page with `?edit=1` / `?new=1`, which the page reads off
+  // the URL once the plan is loaded, then drops (a reload must not reopen).
+
+  /** Whether some plan covers today, the one shown or another. */
+  const hasCurrentPlan = computed(() => {
+    const month = currentYearMonth()
+    const windows = plan.value
+      ? [plan.value, ...planWindows.value]
+      : planWindows.value
+    return windows.some(
+      w => w.startDate.slice(0, 7) <= month && month <= w.endDate.slice(0, 7)
+    )
+  })
+
+  const budgetTodoItems = computed(() => {
+    const current = plan.value
+    const status = planStatus(current)
+    if (!current || !status) return []
+    const indices = comparison.startedPlanIndices.value
+    return composeBudgetTodoItems({
+      plan: current,
+      status,
+      reading: monthReading.value,
+      projects: projects.value,
+      categoriesWithoutEnvelope: categoriesWithoutEnvelope({
+        plan: current,
+        completeMonthsCount: comparison.completePlanMonthsCount.value,
+        categories: visibleExpenseCategories.value.map(cat => {
+          const series = comparison.seriesFor(cat)
+          return {
+            categoryId: cat.categoryId,
+            categoryName: cat.categoryName,
+            amounts: indices.map(i => series?.[i] ?? 0),
+          }
+        }),
+      }),
+      hasCurrentPlan: hasCurrentPlan.value,
+      currentMonth: currentYearMonth(),
+    })
+  })
+
+  /**
+   * The actions « À faire » links to: edit mode, a new plan, an anchor.
+   * The router does not scroll within the page (`scrollBehavior`), so the
+   * page brings the anchor into view itself. Each is read once, then taken
+   * off the URL — the same line can be followed again, and a reload does
+   * not reopen edit mode.
+   */
+  function consumeRouteActions(): void {
+    if (isLoading.value) return
+    const { edit, new: create, ...query } = route.query
+    const hash = route.hash
+    if (edit === undefined && create === undefined && !hash) return
+    if (edit === '1' && plan.value && !isEditing.value) enterEditMode()
+    if (create === '1' && !isEditing.value) openCreateModal()
+    if (hash) {
+      const id = decodeURIComponent(hash.slice(1))
+      void nextTick(() => {
+        document
+          .getElementById(id)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+    void router.replace({ query, hash: '' })
+  }
+
+  watch(
+    [() => route.query.edit, () => route.query.new, () => route.hash],
+    consumeRouteActions
+  )
+
   /** Label describing what the "Réel" figures currently cover. */
   const actualPeriodLabel = computed(() => {
     const progress = comparison.selectedMonthProgress.value
@@ -753,6 +847,11 @@
     try {
       const summaries = await api.getBudgetPlans()
       planCount.value = summaries.length
+      planWindows.value = summaries.map(({ id, startDate, endDate }) => ({
+        id,
+        startDate,
+        endDate,
+      }))
     } catch {
       // Non-fatal — the count is just used to decide whether to show the
       // "Voir l'historique" hint, the rest of the page still renders.
@@ -811,6 +910,7 @@
 
   async function onPlanDeleted(deletedId: string) {
     planCount.value = Math.max(0, planCount.value - 1)
+    planWindows.value = planWindows.value.filter(w => w.id !== deletedId)
     if (plan.value?.id !== deletedId) return
 
     // The displayed plan was the one that got deleted: clear local state
@@ -874,6 +974,14 @@
     monthChoice.value = undefined
     isModalOpen.value = false
     planCount.value++
+    planWindows.value = [
+      ...planWindows.value,
+      {
+        id: created.id,
+        startDate: created.startDate,
+        endDate: created.endDate,
+      },
+    ]
     await Promise.all([
       fetchStatistics(),
       checkYearAgoAvailability(),
@@ -1050,7 +1158,7 @@
 
   onMounted(() => {
     window.addEventListener('beforeunload', warnOnUnload)
-    void fetchData()
+    void fetchData().then(consumeRouteActions)
   })
 
   onBeforeUnmount(() => {
@@ -1239,6 +1347,11 @@
         @show-envelope="showEnvelope"
         @edit="enterEditMode"
       />
+
+      <!-- « À faire »: an envelope over, the project reserve overdrawn, a
+           category without an envelope, the next plan. The dashboard's card;
+           nothing rendered when nothing is to do, nor while editing. -->
+      <TodoCard v-if="!isEditing" class="mb-6" :items="budgetTodoItems" />
 
       <!-- Monthly expenses chart -->
       <BaseCard

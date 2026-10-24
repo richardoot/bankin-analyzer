@@ -17,23 +17,38 @@ vi.mock('vue3-apexcharts/core', () => ({
 }))
 
 const routerPush = vi.fn()
+const routerReplace = vi.fn()
+/**
+ * The route the page reads its actions off (`?edit=1`, `?new=1`, a hash):
+ * reactive, so a test can land on one or follow a line of « À faire ».
+ */
+const currentRoute = vi.hoisted(() => ({
+  query: {} as Record<string, string>,
+  hash: '',
+}))
 /** The guard the page registers, captured so a test can run it. */
 let routeLeaveGuard: (() => boolean) | null = null
-vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: routerPush,
-    resolve: (to: { path: string }) => ({ href: to.path }),
-  }),
-  onBeforeRouteLeave: (guard: () => boolean) => {
-    routeLeaveGuard = guard
-  },
-  // The rows link to the Transactions page; the route is kept on the
-  // element so a test can read it.
-  RouterLink: {
-    props: ['to'],
-    template: '<a :data-to="JSON.stringify(to)" :href="to.path"><slot /></a>',
-  },
-}))
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue')
+  const route = reactive(currentRoute)
+  return {
+    useRouter: () => ({
+      push: routerPush,
+      replace: routerReplace,
+      resolve: (to: { path: string }) => ({ href: to.path }),
+    }),
+    useRoute: () => route,
+    onBeforeRouteLeave: (guard: () => boolean) => {
+      routeLeaveGuard = guard
+    },
+    // The rows link to the Transactions page; the route is kept on the
+    // element so a test can read it.
+    RouterLink: {
+      props: ['to'],
+      template: '<a :data-to="JSON.stringify(to)" :href="to.path"><slot /></a>',
+    },
+  }
+})
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -88,6 +103,10 @@ vi.mock('@/stores/filters', async () => {
 })
 
 import { api } from '@/lib/api'
+import { useRoute } from 'vue-router'
+
+/** The mocked route, reactive: what the page watches. */
+const liveRoute = useRoute()
 
 enableAutoUnmount(afterEach)
 
@@ -190,6 +209,8 @@ describe('BudgetPage', () => {
     filters.deductReimbursements = true
     filters.deductPendingReimbursements = false
     filters.lastSyncError = null
+    currentRoute.query = {}
+    currentRoute.hash = ''
   })
 
   describe('empty state', () => {
@@ -2436,6 +2457,254 @@ describe('BudgetPage', () => {
           wrapper.get('[data-testid="matrix-cell-Maison-2026-05"]').get('a')
         ).query.also
       ).toBeUndefined()
+      wrapper.unmount()
+    })
+  })
+
+  describe('« À faire »', () => {
+    /**
+     * Plan June→Dec 2026, read on 20 August: Alimentation spends 350 € on
+     * a 300 € envelope in August, Transport 60 € a month with none.
+     */
+    const months = [
+      '2026-06',
+      '2026-07',
+      '2026-08',
+      '2026-09',
+      '2026-10',
+      '2026-11',
+      '2026-12',
+    ]
+    const planJunDec: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-jun-dec',
+      name: 'Juin–Déc 2026',
+      startDate: '2026-06-01',
+      endDate: '2026-12-31',
+      monthCount: 7,
+      totalAmount: 300,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          amount: 300,
+        },
+      ],
+    }
+
+    function statisticsWith(
+      food: number[],
+      transport: number[] | null
+    ): BudgetStatisticsDto {
+      return {
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 0,
+            transactionCount: 12,
+            averagePerMonth: 0,
+            monthlyAmounts: food,
+          },
+          ...(transport
+            ? [
+                {
+                  categoryId: 'cat-transport',
+                  categoryName: 'Transport',
+                  categoryIcon: '🚗',
+                  totalAmount: 0,
+                  transactionCount: 4,
+                  averagePerMonth: 0,
+                  monthlyAmounts: transport,
+                },
+              ]
+            : []),
+        ],
+        incomeByCategory: [
+          {
+            categoryId: 'cat-salary',
+            categoryName: 'Salaire',
+            totalAmount: 3000,
+            transactionCount: 3,
+            averagePerMonth: 1000,
+            monthlyAmounts: [1000, 1000, 1000, 0, 0, 0, 0],
+          },
+        ],
+      }
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-08-20T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planJunDec)
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([])
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(
+        statisticsWith([250, 280, 350, 0, 0, 0, 0], [80, 40, 10, 0, 0, 0, 0])
+      )
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const keysOf = (w: ReturnType<typeof mount>) =>
+      w
+        .findAll('[data-testid^="todo-item-"]')
+        .map(a => a.attributes('data-testid'))
+
+    it('sits between the band and the table, in the plan’s order', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const card = wrapper.get('[data-testid="todo-card"]')
+      const band = wrapper.get('[data-testid="budget-month-band"]')
+      const table = wrapper.get('[data-testid="budget-table"]')
+      expect(
+        band.element.compareDocumentPosition(card.element) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+      expect(
+        card.element.compareDocumentPosition(table.element) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+
+      expect(keysOf(wrapper)).toEqual([
+        'todo-item-envelope-cat-food',
+        'todo-item-no-envelope-cat-transport',
+      ])
+      const envelope = wrapper.get(
+        '[data-testid="todo-item-envelope-cat-food"]'
+      )
+      expect(envelope.text()).toMatch(/Alimentation : enveloppe dépassée de 50/)
+      expect(JSON.parse(envelope.attributes('data-to') ?? '{}')).toEqual({
+        hash: '#budget-row-cat-food',
+      })
+      const transport = wrapper.get(
+        '[data-testid="todo-item-no-envelope-cat-transport"]'
+      )
+      // June and July, the complete months: (80 + 40) / 2.
+      expect(transport.text()).toMatch(
+        /Transport sans enveloppe · 60\s€ par mois/
+      )
+      expect(JSON.parse(transport.attributes('data-to') ?? '{}')).toEqual({
+        path: '/budget',
+        query: { edit: '1' },
+      })
+      wrapper.unmount()
+    })
+
+    it('renders nothing when nothing is to do', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(
+        statisticsWith([250, 280, 120, 0, 0, 0, 0], null)
+      )
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(wrapper.find('[data-testid="todo-card"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('is not shown while the envelopes are being edited', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+
+      expect(wrapper.find('[data-testid="todo-card"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('asks for the next plan when the one shown is over and none runs', async () => {
+      vi.setSystemTime(new Date('2027-02-10T12:00:00Z'))
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: planJunDec.id,
+          name: planJunDec.name,
+          startDate: planJunDec.startDate,
+          endDate: planJunDec.endDate,
+          monthCount: 7,
+          totalAmount: 300,
+          entryCount: 1,
+          createdAt: planJunDec.createdAt,
+        },
+      ])
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const line = wrapper.get('[data-testid="todo-item-no-current-plan"]')
+      expect(line.text()).toContain('Aucun plan en cours : créer le suivant')
+      expect(JSON.parse(line.attributes('data-to') ?? '{}')).toEqual({
+        path: '/budget',
+        query: { new: '1' },
+      })
+      wrapper.unmount()
+    })
+
+    it('enters edit mode on ?edit=1, then takes it off the URL', async () => {
+      currentRoute.query = { edit: '1', from: 'todo' }
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(true)
+      expect(routerReplace).toHaveBeenCalledWith({
+        query: { from: 'todo' },
+        hash: '',
+      })
+      wrapper.unmount()
+    })
+
+    it('opens « Nouveau budget » on ?new=1, then takes it off the URL', async () => {
+      currentRoute.query = { new: '1' }
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.findComponent({ name: 'NewBudgetPlanModal' }).props('open')
+      ).toBe(true)
+      expect(routerReplace).toHaveBeenCalledWith({ query: {}, hash: '' })
+      wrapper.unmount()
+    })
+
+    it('leaves the URL alone when it carries no action', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(routerReplace).not.toHaveBeenCalled()
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('follows a line on the page: edit mode, or the row brought into view', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      const row = document.getElementById('budget-row-cat-food')
+      expect(row).not.toBeNull()
+      const scroll = vi.fn()
+      if (row) row.scrollIntoView = scroll
+      liveRoute.hash = '#budget-row-cat-food'
+      await flushPromises()
+      expect(scroll).toHaveBeenCalledTimes(1)
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: {}, hash: '' })
+
+      liveRoute.hash = ''
+      liveRoute.query = { edit: '1' }
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(true)
       wrapper.unmount()
     })
   })
