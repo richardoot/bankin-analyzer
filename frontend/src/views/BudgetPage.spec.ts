@@ -1327,6 +1327,144 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
+    describe('the chart and the grid, folded under the envelopes', () => {
+      const originalMatchMedia = window.matchMedia
+
+      function stubWidth(belowMd: boolean): void {
+        Object.defineProperty(window, 'matchMedia', {
+          value: vi.fn(() => ({
+            matches: belowMd,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+          })),
+          writable: true,
+          configurable: true,
+        })
+      }
+
+      afterEach(() => {
+        Object.defineProperty(window, 'matchMedia', {
+          value: originalMatchMedia,
+          writable: true,
+          configurable: true,
+        })
+      })
+
+      const detailsOf = (w: ReturnType<typeof mount>, id: string) =>
+        w.get(`[data-testid="${id}"]`).element as HTMLDetailsElement
+
+      it('sets the two details after the projects and smoothed lines', async () => {
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        const folded = wrapper.get('[data-testid="budget-folded-lines"]')
+        const ids = [...folded.element.children].map(el =>
+          el.getAttribute('data-testid')
+        )
+        expect(ids.slice(-2)).toEqual([
+          'budget-chart-details',
+          'budget-matrix-details',
+        ])
+        expect(detailsOf(wrapper, 'budget-chart-details').tagName).toBe(
+          'DETAILS'
+        )
+        expect(
+          wrapper.get('[data-testid="budget-chart-toggle"]').text()
+        ).toContain('Dépenses et enveloppe par mois')
+        expect(
+          wrapper.get('[data-testid="budget-matrix-toggle"]').text()
+        ).toContain('Mois par mois')
+        // Nothing of the months above the list any more.
+        const table = wrapper.get('[data-testid="budget-table"]').element
+        const chart = wrapper.get(
+          '[data-testid="budget-chart-details"]'
+        ).element
+        expect(
+          table.compareDocumentPosition(chart) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+        wrapper.unmount()
+      })
+
+      it('opens the chart on a desk and folds the grid', async () => {
+        stubWidth(false)
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        expect(detailsOf(wrapper, 'budget-chart-details').open).toBe(true)
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(true)
+        expect(detailsOf(wrapper, 'budget-matrix-details').open).toBe(false)
+        // The grid is there, folded: the details hides it.
+        expect(
+          wrapper
+            .get('[data-testid="budget-matrix-details"]')
+            .find('[data-testid="budget-monthly-matrix"]')
+            .exists()
+        ).toBe(true)
+        wrapper.unmount()
+      })
+
+      it('folds both below md, and draws the chart once opened', async () => {
+        stubWidth(true)
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        const chart = detailsOf(wrapper, 'budget-chart-details')
+        expect(chart.open).toBe(false)
+        expect(detailsOf(wrapper, 'budget-matrix-details').open).toBe(false)
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(false)
+
+        chart.open = true
+        await wrapper
+          .get('[data-testid="budget-chart-details"]')
+          .trigger('toggle')
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(true)
+        wrapper.unmount()
+      })
+
+      it('hands the chart the comparison only while editing', async () => {
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        const chartProps = () =>
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
+        expect(chartProps().planStartMonth).toBe('2026-06')
+        expect(chartProps().comparisonStartMonth).toBeUndefined()
+        expect(chartProps().comparisonEndMonth).toBeUndefined()
+
+        await compareWith(wrapper, '3m')
+        expect(chartProps().comparisonStartMonth).toBeTruthy()
+        expect(chartProps().comparisonEndMonth).toBeTruthy()
+
+        await wrapper
+          .get('[data-testid="budget-cancel-button"]')
+          .trigger('click')
+        await flushPromises()
+        expect(chartProps().comparisonStartMonth).toBeUndefined()
+        wrapper.unmount()
+      })
+
+      it('leaves both out on a plan with a single started month', async () => {
+        vi.setSystemTime(new Date('2026-06-10T12:00:00Z'))
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        expect(
+          wrapper.find('[data-testid="budget-chart-details"]').exists()
+        ).toBe(false)
+        expect(
+          wrapper.find('[data-testid="budget-matrix-details"]').exists()
+        ).toBe(false)
+        wrapper.unmount()
+      })
+    })
+
     it('lays the plan out month by month, envelope beside spending', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()

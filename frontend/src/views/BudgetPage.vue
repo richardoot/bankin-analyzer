@@ -37,6 +37,8 @@
   import { type SortOrder } from '@/components/budget/sortOptions'
   import { planStatus } from '@/components/budget/planStatus'
   import BudgetMonthlyMatrix from '@/components/budget/BudgetMonthlyMatrix.vue'
+  import { budgetChartMonths } from '@/lib/budgetChartMonths'
+  import { useIsMobile } from '@/composables/useMediaQuery'
   import type {
     MatrixMonth,
     MatrixRow,
@@ -821,6 +823,43 @@
   const showMonthlyMatrix = computed(() => matrixMonths.value.length >= 2)
 
   /**
+   * The ranges « Dépenses et enveloppe par mois » draws: the plan's, and
+   * the comparison's only while editing (lot 5) — following the plan, the
+   * chart reads the plan's months alone.
+   */
+  const chartRanges = computed(() => ({
+    planStartMonth: plan.value?.startDate.slice(0, 7),
+    planEndMonth: plan.value?.endDate.slice(0, 7),
+    comparisonStartMonth: isEditing.value
+      ? comparisonRange.value?.startMonth
+      : undefined,
+    comparisonEndMonth: isEditing.value
+      ? comparisonRange.value?.endMonth
+      : undefined,
+  }))
+
+  /** The chart earns its fold at two columns, as the grid does. */
+  const showMonthlyChart = computed(
+    () =>
+      budgetChartMonths(statistics.value?.monthLabels ?? [], {
+        ...chartRanges.value,
+        currentMonth: currentYearMonth(),
+      }).length >= 2
+  )
+
+  /**
+   * « Dépenses et enveloppe par mois » is a native `details`, open on a
+   * desk and folded below md, as the dashboard's chart is. `open` is an
+   * attribute: the page follows the element's own toggle so a tap is
+   * never undone by a render.
+   */
+  const isBelowMd = useIsMobile()
+  const chartOpen = ref(!isBelowMd.value)
+  function onChartToggle(event: Event): void {
+    chartOpen.value = (event.target as HTMLDetailsElement).open
+  }
+
+  /**
    * The events' part of each month, stacked hatched on a row's drill-down
    * chart — in the real reading only, and only when a month carries any,
    * as on the dashboard's rows. « Vie courante » leaves them out of the
@@ -1415,40 +1454,6 @@
            nothing rendered when nothing is to do, nor while editing. -->
       <TodoCard v-if="!isEditing" class="mb-6" :items="budgetTodoItems" />
 
-      <!-- Monthly expenses chart -->
-      <BaseCard
-        v-if="monthlyTotalExpenses.length >= 2 && statistics?.monthLabels"
-        class="mb-6"
-      >
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-          Évolution des dépenses mensuelles
-        </h2>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          Lignes de référence : revenus moyens et budget total alloué.
-        </p>
-        <MonthlyExpensesChart
-          :monthly-totals="monthlyTotalExpenses"
-          :month-labels="statistics.monthLabels"
-          :average-income="chartAverageIncome"
-          :total-budget="totalBudget"
-          :plan-start-month="plan.startDate.slice(0, 7)"
-          :plan-end-month="plan.endDate.slice(0, 7)"
-          :comparison-start-month="comparisonRange?.startMonth ?? ''"
-          :comparison-end-month="comparisonRange?.endMonth ?? ''"
-          @select-month="openMonthTransactions"
-        />
-      </BaseCard>
-
-      <!-- Month-by-month grid: which envelope drifts, and when. The
-             averages above cannot answer that — they average it away. -->
-      <BudgetMonthlyMatrix
-        v-if="showMonthlyMatrix"
-        :months="matrixMonths"
-        :rows="matrixRows"
-        :selected-month="selectedMonth"
-        :exceptional="everydayFilter"
-      />
-
       <!-- Expense category list -->
       <BaseCard bordered>
         <BudgetTableControls
@@ -1603,6 +1608,76 @@
             :purchases="planSmoothedPurchases"
             :current-month="currentYearMonth()"
           />
+
+          <!-- The months, folded in place (lot 5), on the dashboard's
+               « Revenus et dépenses par mois »: the chart open on a desk,
+               folded below md, drawn once open (Apex measures its box, a
+               folded one is 0px); the comparison's months only while
+               editing. -->
+          <details
+            v-if="showMonthlyChart && statistics?.monthLabels"
+            data-testid="budget-chart-details"
+            class="group border-t border-gray-100 text-[13px] dark:border-slate-700"
+            :open="chartOpen"
+            @toggle="onChartToggle"
+          >
+            <summary
+              data-testid="budget-chart-toggle"
+              class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-4 px-4 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden"
+            >
+              <span class="font-semibold text-gray-900 dark:text-gray-100">
+                Dépenses et enveloppe par mois
+              </span>
+              <span
+                aria-hidden="true"
+                class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+                >▾</span
+              >
+            </summary>
+            <div v-if="chartOpen" class="px-4 pb-4">
+              <MonthlyExpensesChart
+                :monthly-totals="monthlyTotalExpenses"
+                :month-labels="statistics.monthLabels"
+                :average-income="chartAverageIncome"
+                :total-budget="totalBudget"
+                :plan-start-month="chartRanges.planStartMonth"
+                :plan-end-month="chartRanges.planEndMonth"
+                :comparison-start-month="chartRanges.comparisonStartMonth"
+                :comparison-end-month="chartRanges.comparisonEndMonth"
+                @select-month="openMonthTransactions"
+              />
+            </div>
+          </details>
+
+          <!-- Month by month, every envelope at once: folded everywhere,
+               an occasional reading the rows already carry month by month. -->
+          <details
+            v-if="showMonthlyMatrix"
+            data-testid="budget-matrix-details"
+            class="group border-t border-gray-100 text-[13px] dark:border-slate-700"
+          >
+            <summary
+              data-testid="budget-matrix-toggle"
+              class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-4 px-4 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden"
+            >
+              <span class="font-semibold text-gray-900 dark:text-gray-100">
+                Mois par mois
+              </span>
+              <span
+                aria-hidden="true"
+                class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+                >▾</span
+              >
+            </summary>
+            <div class="px-4 pb-4">
+              <BudgetMonthlyMatrix
+                :months="matrixMonths"
+                :rows="matrixRows"
+                :selected-month="selectedMonth"
+                :exceptional="everydayFilter"
+              />
+            </div>
+          </details>
         </div>
       </BaseCard>
 
