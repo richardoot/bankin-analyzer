@@ -8,6 +8,7 @@
     TagBudgetSummaryItemDto,
     TagDto,
   } from '@/lib/api'
+  import { BUDGET_PROJECTS_ANCHOR } from '@/lib/budgetTodo'
   import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
   import { transactionsLink } from '@/lib/transactionsLink'
   import {
@@ -154,6 +155,7 @@
 <template>
   <div
     v-if="hasContent"
+    :id="BUDGET_PROJECTS_ANCHOR"
     data-testid="budget-projects-line"
     class="border-t border-gray-100 text-[13px] dark:border-slate-700"
   >

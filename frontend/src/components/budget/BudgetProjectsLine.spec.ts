@@ -314,6 +314,13 @@ describe('BudgetProjectsLine', () => {
     expect(wrapper.emitted('open-tag')).toEqual([['tag-rome']])
   })
 
+  it('carries the anchor « À faire » points to', () => {
+    const wrapper = mountLine(looseMove)
+    expect(
+      wrapper.find('[data-testid="budget-projects-line"]').attributes('id')
+    ).toBe('budget-projects')
+  })
+
   it('shows for events alone, with no project', () => {
     const wrapper = mountLine(null, {
       events: [event('tag-rome', 'Rome', null)],
