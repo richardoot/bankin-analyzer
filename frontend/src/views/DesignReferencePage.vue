@@ -34,7 +34,18 @@
   import StructureLines from '@/components/dashboard/StructureLines.vue'
   import PeriodSummaryLines from '@/components/dashboard/PeriodSummaryLines.vue'
   import { DATA_HUE, STATE_BADGE_CLASSES } from '@/lib/stateTints'
+  import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
+  import BudgetReviewBand from '@/components/budget/BudgetReviewBand.vue'
+  import BudgetPlanningBand from '@/components/budget/BudgetPlanningBand.vue'
+  import BudgetProjectsLine from '@/components/budget/BudgetProjectsLine.vue'
+  import BudgetAmortizedLine from '@/components/budget/BudgetAmortizedLine.vue'
+  import { budgetMonthReading, budgetReviewReading } from '@/lib/budgetMonth'
   import {
+    BUDGET_MONTH_OPTIONS,
+    BUDGET_PLAN_SAMPLE,
+    BUDGET_PROJECTS_SAMPLE,
+    BUDGET_SMOOTHED_SAMPLE,
+    budgetSampleInput,
     MONTH_SAMPLES,
     MONTH_SAMPLE_OPTIONS,
     STRUCTURE_SAMPLE,
@@ -72,8 +83,9 @@
     {
       hue: 'primary',
       cls: 'bg-primary-600',
-      use: 'Action et sélection : boutons, liens, segment ou ligne choisis, progression, anneaux de focus. Plein en 600 (survol 700), texte en 700 / 400 en sombre. Sur Budget, les chiffres du plan.',
-      never: 'une donnée positive (c’est green).',
+      use: 'Action et sélection : boutons, liens, segment ou ligne choisis, progression, anneaux de focus. Plein en 600 (survol 700), texte en 700 / 400 en sombre.',
+      never:
+        'une donnée positive (c’est green) ; un chiffre ou un statut du budget (encre).',
       sample:
         'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
       sampleLabel: 'Sélectionné',
@@ -81,18 +93,18 @@
     {
       hue: 'red',
       cls: 'bg-red-600',
-      use: 'Danger et négatif : destruction, erreurs, dépenses, tout dépassement (enveloppe, mois, réserve, épargne sous zéro).',
+      use: 'Danger et négatif : destruction, erreurs, dépenses hors tableau de bord et budget.',
       never:
-        'réinitialiser un filtre ou un brouillon, réessayer ; un chiffre ou un dépassement du tableau de bord (teintes d’état).',
+        'réinitialiser un filtre ou un brouillon, réessayer ; un chiffre ou un dépassement du tableau de bord ou du budget (teintes d’état).',
       sample: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-      sampleLabel: '⚠ Dépassé',
+      sampleLabel: 'Supprimer',
     },
     {
       hue: 'green',
       cls: 'bg-green-600',
       use: 'Donnée positive : revenus, argent reçu, dette réglée, épargne ou marge positive, import réussi, succès.',
       never:
-        'une action (« Valider », « Pointer » sont primary) ; un chiffre du tableau de bord (teintes d’état).',
+        'une action (« Valider », « Pointer » sont primary) ; un chiffre du tableau de bord ou du budget (teintes d’état).',
       sample:
         'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
       sampleLabel: 'Réglé',
@@ -126,7 +138,7 @@
     {
       hue: 'indigo',
       cls: 'bg-indigo-500',
-      use: 'Donnée de référence : la colonne et le résumé « Historique » du budget, la période de comparaison du graphique.',
+      use: 'Une teinte de la palette des catégories, plus un rôle : l’historique du budget est à l’encre, sa comparaison en gris.',
       never: 'une action, une sélection, un statut.',
       sample:
         'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
@@ -234,6 +246,14 @@
   const demoReading = ref<'everyday' | 'actual'>('everyday')
   const demoRetrying = ref(false)
   const demoMonthState = ref<MonthSampleState>('under')
+  /** The budget's month read, in « Ce mois-ci » and « Bilan du plan ». */
+  const demoBudgetMonth = ref<string | null>('2026-10')
+  const demoReviewMonth = ref<string | null>(null)
+  const demoBudgetIncome = ref<number | null>(2465)
+  const BUDGET_REVIEW_OPTIONS = BUDGET_MONTH_OPTIONS.map(o => ({
+    ...o,
+    isRunning: false,
+  }))
 
   const demoChips = ref<FilterChip[]>([
     { key: 'type', label: 'Dépenses' },
@@ -833,8 +853,8 @@
           Teintes d'état
         </h2>
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          Sur le tableau de bord, les chiffres sont à l'encre du texte ; la
-          couleur ne dit qu'un état, en trois teintes tirées de
+          Sur le tableau de bord et le budget, les chiffres sont à l'encre du
+          texte ; la couleur ne dit qu'un état, en trois teintes tirées de
           <code class="font-mono text-xs">lib/stateTints</code>. L'ambre sert
           aussi « À faire », et rien d'autre ; jamais de rouge ni de vert sur
           une donnée. La donnée elle-même (une barre, la ligne d'une sparkline)
@@ -937,6 +957,83 @@
             :events="SUMMARY_SAMPLE.events"
             :families="SUMMARY_SAMPLE.families"
             has-exceptional-expenses
+          />
+        </div>
+      </BaseCard>
+
+      <!-- Budget: the same tints, the plan's bands and folded lines -->
+      <BaseCard as="section" padding="lg" data-testid="design-budget">
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Budget
+        </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Les teintes d’état valent pour le budget : les chiffres du plan sont à
+          l’encre, l’ambre dit un dépassement, jamais de rouge, de vert ni de
+          primary sur un chiffre. Un plan « Automne 2026 » inventé, lu le 23
+          octobre ; « Mois lu » est vivant.
+        </p>
+        <SectionLabel as="h3" class="mb-2">
+          BudgetMonthBand · Ce mois-ci
+        </SectionLabel>
+        <BudgetMonthBand
+          :reading="budgetMonthReading(budgetSampleInput(demoBudgetMonth))"
+          plan-start="2026-07-01"
+          :month-options="BUDGET_MONTH_OPTIONS"
+          :selected-month="demoBudgetMonth"
+          :complete-months-count="3"
+          @select-month="demoBudgetMonth = $event"
+        />
+
+        <SectionLabel as="h3" class="mt-8 mb-2">
+          BudgetPlanningBand · en édition
+        </SectionLabel>
+        <BudgetPlanningBand
+          :plan-name="BUDGET_PLAN_SAMPLE.name"
+          :month-count="6"
+          :reference-income="demoBudgetIncome"
+          :saved-reference-income="2465"
+          :draft-total="1820"
+          :saved-total="1850"
+          :delta="-30"
+          :dirty-count="2"
+          :savings-target="500"
+          :comparison-expense-avg="1853"
+          comparison-label="janv. → juin 2026"
+          @update:reference-income="demoBudgetIncome = $event"
+        />
+
+        <SectionLabel as="h3" class="mt-8 mb-2">
+          BudgetReviewBand · plan terminé
+        </SectionLabel>
+        <BudgetReviewBand
+          :reading="
+            budgetReviewReading(budgetSampleInput(demoReviewMonth, false))
+          "
+          :plan-name="BUDGET_PLAN_SAMPLE.name"
+          plan-start="2026-07-01"
+          plan-end="2026-10-31"
+          :month-options="BUDGET_REVIEW_OPTIONS"
+          :selected-month="demoReviewMonth"
+          :projects="BUDGET_PROJECTS_SAMPLE"
+          :project-reserve="690"
+          @select-month="demoReviewMonth = $event"
+        />
+
+        <SectionLabel as="h3" class="mt-8 mb-2">
+          BudgetProjectsLine · BudgetAmortizedLine
+        </SectionLabel>
+        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Repliées sous les enveloppes, une ligne de 13 px chacune ; la réserve
+          entamée en ambre.
+        </p>
+        <div class="rounded-lg border border-gray-200 dark:border-slate-700">
+          <BudgetProjectsLine
+            :projects="BUDGET_PROJECTS_SAMPLE"
+            :plan="BUDGET_PLAN_SAMPLE"
+          />
+          <BudgetAmortizedLine
+            :purchases="BUDGET_SMOOTHED_SAMPLE"
+            current-month="2026-10"
           />
         </div>
       </BaseCard>

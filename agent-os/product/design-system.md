@@ -146,7 +146,7 @@ font-family:
 - Séparateur décimal : virgule (format français)
 - Devise après le montant : `1 234,56 €`
 - Signe négatif devant : `-125,00 €`
-- Couleur : vert pour positif, rouge pour négatif, hors tableau de bord (voir 5.5 : un chiffre y reste à l'encre du texte)
+- Couleur : vert pour positif, rouge pour négatif, hors tableau de bord et budget (voir 5.5 : un chiffre y reste à l'encre du texte, le signe moins y est typographique, « −870 € », par `formatEuros`)
 
 ---
 
@@ -357,9 +357,9 @@ Une hausse n'est pas un reproche ni une baisse une victoire : ni rouge ni vert, 
 - **Hover sur chart** : Tooltip avec détails
 - **Sélection segment** : Highlight + zoom léger
 
-### 5.5 Teintes d'état (tableau de bord)
+### 5.5 Teintes d'état (tableau de bord et budget)
 
-Règle du 2026-10-24 (refonte du tableau de bord, lot 6). Les chiffres sont à l'encre du texte ; la couleur ne porte que l'état d'un chiffre, son écart à l'habitude ou un dépassement, en trois teintes et pas une de plus.
+Règle du 2026-10-24 (refonte du tableau de bord, lot 6), étendue au budget le même jour (refonte du budget, lot 7). Les chiffres sont à l'encre du texte ; la couleur ne porte que l'état d'un chiffre, son écart à l'habitude ou à l'enveloppe, ou un dépassement, en trois teintes et pas une de plus.
 
 | État                                         | Teinte | Badge                        | Point de sparkline |
 | -------------------------------------------- | ------ | ---------------------------- | ------------------ |
@@ -372,7 +372,8 @@ Règle du 2026-10-24 (refonte du tableau de bord, lot 6). Les chiffres sont à l
 - **Jamais de rouge ni de vert sur une donnée** : un mois au-dessus de l'habitude n'est pas une faute, un mois remboursé n'est pas un gain. Un mois que les remboursements font passer sous zéro est gris. Le rouge reste aux erreurs et aux actions destructrices.
 - **L'épargne et un report** entre deux sous-catégories ne sont pas des dépenses au-dessus ou au-dessous d'une habitude : gris.
 - **Le texte dit l'état**, la couleur le double : « +16 % », « dans l'habitude », « dépassé ». Aucun état ne repose sur la seule couleur (WCAG 1.4.1).
-- **Une source** : `frontend/src/lib/stateTints.ts` (`STATE_BADGE_CLASSES`, `STATE_COLORS`, `DATA_HUE`), lue par la bande du mois, les tendances et les graphiques. Une spec relit les sources du tableau de bord et échoue sur `text-red-*`, `text-green-*`, `text-emerald-*` ou une bordure `border-l-4`. La page `/design` (développement) montre les teintes et les briques du tableau de bord dans leurs états.
+- **Le budget suit la même règle** : un chiffre du plan (enveloppe, dépensé, épargne, total) est à l'encre, jamais en `primary` ; le badge d'une enveloppe, d'une bande ou de la barre d'édition dit son état dans les trois teintes ; une enveloppe dépassée, une épargne ou une réserve sous zéro sont en ambre ; le statut d'un plan (« En cours », « Terminé ») est à l'encre. `primary` reste aux actions et à la sélection (un lien, le mois lu dans une feuille, le plan affiché dans l'historique).
+- **Une source** : `frontend/src/lib/stateTints.ts` (`STATE_BADGE_CLASSES`, `STATE_COLORS`, `DATA_HUE`), lue par la bande du mois, les tendances, les graphiques et les bandes du budget. Une spec relit les sources du tableau de bord, toutes celles du budget (assistant de création compris) et la page Budget, et échoue sur `text-red-*`, `text-green-*`, `text-emerald-*` ou une bordure `border-l-4`. La page `/design` (développement) montre les teintes, les briques du tableau de bord dans leurs états et celles du budget (les trois bandes, les deux lignes repliées).
 
 ---
 
