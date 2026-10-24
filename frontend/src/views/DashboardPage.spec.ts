@@ -843,7 +843,7 @@ describe('DashboardPage', () => {
       total: 845.5,
     }
 
-    it("sits after the month band, « À faire » and before « Où part l'argent »", async () => {
+    it("sits after the month band, before « Où part l'argent »; « À faire » comes last", async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
         spendingStructure: structure,
@@ -856,9 +856,9 @@ describe('DashboardPage', () => {
       const order = [
         'month-band',
         'spending-trends',
-        'todo-card',
         'dashboard-where-section',
         'structure-lines',
+        'todo-card',
       ].map(id => wrapper.find(`[data-testid="${id}"]`).element)
       for (let i = 1; i < order.length; i++) {
         const before = order[i - 1] as Node
@@ -907,7 +907,7 @@ describe('DashboardPage', () => {
     const position = (a: Element, b: Element) =>
       a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
 
-    it('sits between « Ce qui change » and the expenses when something is to do', async () => {
+    it("comes last, after « Où part l'argent », when something is to do", async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
         pendingReceivables: 8516,
@@ -924,14 +924,15 @@ describe('DashboardPage', () => {
       ).toBeTruthy()
       expect(
         position(
-          card.element,
-          wrapper.get('[data-testid="dashboard-period"]').element
+          wrapper.get('[data-testid="dashboard-period"]').element,
+          card.element
         )
       ).toBeTruthy()
+      // The whole « Où part l'argent » section sits before the chores.
       expect(
         position(
-          card.element,
-          wrapper.get('[data-testid="dashboard-where-section"]').element
+          wrapper.get('[data-testid="dashboard-where-section"]').element,
+          card.element
         )
       ).toBeTruthy()
       const line = wrapper.get('[data-testid="todo-item-receivables"]')

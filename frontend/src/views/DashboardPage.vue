@@ -313,10 +313,6 @@
           @loaded="trendsData = $event"
         />
 
-        <!-- « À faire »: the lines to file, the money advanced, an envelope
-             over, a charge that moved. Renders nothing when nothing is to do. -->
-        <TodoCard class="mb-8" :items="todoItems" />
-
         <!-- « Où part l'argent »: the period, in its heading and its
              selector, then one card — the structure, the months, the
              categories, the summary lines. -->
@@ -442,6 +438,12 @@
             />
           </BaseCard>
         </section>
+
+        <!-- « À faire », last: the lines to file, the money advanced, an
+             envelope over, a charge that moved. Richard's choice of
+             2026-10-25: the page reads first, the chores come after.
+             Renders nothing when nothing is to do. -->
+        <TodoCard class="mb-8" :items="todoItems" />
       </template>
 
       <!-- A quiet period, for a user who has data elsewhere in time, or a
