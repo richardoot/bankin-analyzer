@@ -37,7 +37,6 @@
     totalExpenses,
     totalIncome,
     breakdownMode,
-    setBreakdownMode,
     displayedTotalExpenses,
     pendingPreferenceSyncError,
     exceptionalEvents,
@@ -83,12 +82,6 @@
   )
   const filtersStore = useFiltersStore()
   const accountsStore = useAccountsStore()
-
-  /** The reading, written through the composable that keeps it. */
-  const breakdownModeModel = computed({
-    get: () => breakdownMode.value,
-    set: setBreakdownMode,
-  })
 
   /**
    * « Ce mois-ci »: its own request, sent with the summary, following the
@@ -244,7 +237,7 @@
              which one is on. -->
         <ReadingMenu
           v-if="!showFullLoader"
-          v-model:breakdown-mode="breakdownModeModel"
+          v-model:breakdown-mode="breakdownMode"
           v-model:deduct-reimbursements="deductReimbursements"
           v-model:deduct-pending-reimbursements="deductPendingReimbursements"
           :has-exceptional-expenses="hasExceptionalExpenses"

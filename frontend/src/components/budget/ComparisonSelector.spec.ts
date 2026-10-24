@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ComparisonSelector from './ComparisonSelector.vue'
+import type { ComparisonPreset } from '@/composables/useBudgetComparison'
 import type { BudgetPlanDto } from '@/lib/api'
 
 const samplePlan: BudgetPlanDto = {
@@ -15,167 +16,173 @@ const samplePlan: BudgetPlanDto = {
   updatedAt: '2026-04-01T00:00:00Z',
 }
 
-function openDropdown(wrapper: ReturnType<typeof mount>) {
-  return wrapper.find('[data-testid="comparison-trigger"]').trigger('click')
+function mountSelector(
+  props: Partial<{
+    yearAgoAvailable: boolean
+    preset: ComparisonPreset
+    customStartDate: string
+    customEndDate: string
+  }> = {}
+) {
+  return mount(ComparisonSelector, {
+    props: {
+      plan: samplePlan,
+      yearAgoAvailable: false,
+      preset: 'none',
+      customStartDate: '',
+      customEndDate: '',
+      ...props,
+    },
+  })
 }
 
 describe('ComparisonSelector', () => {
-  it('renders "Aucune comparaison" as the initial label and emits a null range', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: true,
-        preset: 'none',
-        customStartDate: '',
-        customEndDate: '',
-      },
-    })
+  it('is a segment of the comparisons, « Aucune » chosen and a null range at first', () => {
+    const wrapper = mountSelector()
 
-    expect(wrapper.text()).toContain('Aucune comparaison')
-    // The selector emits the resolved range via watch(immediate: true)
-    const emitted = wrapper.emitted('update:range')
-    expect(emitted?.[0]).toEqual([null])
+    const group = wrapper.get('[role="radiogroup"]')
+    expect(wrapper.text()).toContain('Comparer avec')
+    expect(group.findAll('[role="radio"]').map(o => o.text())).toEqual([
+      'Aucune',
+      '3 mois',
+      '6 mois',
+      '12 mois',
+      'Dates…',
+    ])
+    expect(
+      group.findAll('[role="radio"]').map(o => o.attributes('aria-checked'))
+    ).toEqual(['true', 'false', 'false', 'false', 'false'])
+    // The menu button is gone.
+    expect(wrapper.find('[data-testid="comparison-trigger"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.emitted('update:range')).toEqual([[null]])
   })
 
-  it('emits a 3-month range anchored to the plan start when "3m" is picked', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: false,
-        preset: 'none',
-        customStartDate: '',
-        customEndDate: '',
-      },
-    })
+  it('emits a 3-month range anchored to the plan start when « 3 mois » is picked', async () => {
+    const wrapper = mountSelector()
 
-    await openDropdown(wrapper)
-    await wrapper.find('[data-testid="comparison-option-3m"]').trigger('click')
+    await wrapper.get('[data-testid="comparison-option-3m"]').trigger('click')
+    expect(wrapper.emitted('update:preset')).toEqual([['3m']])
 
-    // Last "update:preset" event carries '3m'
-    const presetEvents = wrapper.emitted('update:preset')
-    expect(presetEvents?.at(-1)).toEqual(['3m'])
-
-    // The selector itself doesn't change its own `preset` prop — the parent
-    // would react to the event. Re-mount with the updated preset to assert
-    // the resolved range.
+    // The parent owns the preset: once it is passed back, the range follows.
     await wrapper.setProps({ preset: '3m' })
-    const rangeEvents = wrapper.emitted('update:range')
-    const lastRange = rangeEvents?.at(-1)?.[0]
-    expect(lastRange).toMatchObject({
-      // 3 months before plan start (May 2026) → Feb, Mar, Apr 2026
-      startDate: '2026-02-01',
-      endDate: '2026-04-30',
-      startMonth: '2026-02',
-      endMonth: '2026-04',
-      source: '3m',
-    })
+    expect(
+      wrapper
+        .get('[data-testid="comparison-option-3m"]')
+        .attributes('aria-checked')
+    ).toBe('true')
+    expect(wrapper.emitted('update:range')?.at(-1)).toEqual([
+      expect.objectContaining({
+        // 3 months before plan start (May 2026) → Feb, Mar, Apr 2026
+        startDate: '2026-02-01',
+        endDate: '2026-04-30',
+        startMonth: '2026-02',
+        endMonth: '2026-04',
+        source: '3m',
+      }),
+    ])
   })
 
-  it('omits the "Année dernière" option when no data is available', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: false,
-        preset: 'none',
-        customStartDate: '',
-        customEndDate: '',
-      },
-    })
+  it('does not emit again for the choice already made', async () => {
+    const wrapper = mountSelector({ preset: '6m' })
 
-    await openDropdown(wrapper)
+    await wrapper.get('[data-testid="comparison-option-6m"]').trigger('click')
+
+    expect(wrapper.emitted('update:preset')).toBeUndefined()
+  })
+
+  it('offers « Il y a un an » only when that year holds data, anchored one year before', () => {
     expect(
-      wrapper.find('[data-testid="comparison-option-year-ago"]').exists()
+      mountSelector()
+        .find('[data-testid="comparison-option-year-ago"]')
+        .exists()
     ).toBe(false)
-  })
 
-  it('exposes the "Année dernière" option when data exists, anchored one year before', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: true,
-        preset: 'year-ago',
-        customStartDate: '',
-        customEndDate: '',
-      },
+    const wrapper = mountSelector({
+      yearAgoAvailable: true,
+      preset: 'year-ago',
     })
-
-    await openDropdown(wrapper)
     expect(
-      wrapper.find('[data-testid="comparison-option-year-ago"]').exists()
-    ).toBe(true)
-
-    const range = wrapper.emitted('update:range')?.at(-1)?.[0]
-    expect(range).toMatchObject({
-      startDate: '2025-05-01',
-      endDate: '2025-05-31',
-      source: 'year-ago',
-    })
+      wrapper.get('[data-testid="comparison-option-year-ago"]').text()
+    ).toBe('Il y a un an')
+    expect(wrapper.emitted('update:range')?.at(-1)).toEqual([
+      expect.objectContaining({
+        startDate: '2025-05-01',
+        endDate: '2025-05-31',
+        source: 'year-ago',
+      }),
+    ])
   })
 
-  it('is a menu button: says when it is open, closes on Escape and outside', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: false,
-        preset: 'none',
-        customStartDate: '',
-        customEndDate: '',
-      },
-      attachTo: document.body,
-    })
-    const trigger = wrapper.find('[data-testid="comparison-trigger"]')
-    expect(trigger.attributes('aria-expanded')).toBe('false')
-    expect(trigger.attributes('aria-haspopup')).toBe('menu')
+  it('shows the two dates under the segment once « Dates… » is chosen, and passes them up', async () => {
+    const wrapper = mountSelector()
+    expect(
+      wrapper.find('[data-testid="comparison-custom-start"]').exists()
+    ).toBe(false)
 
-    await openDropdown(wrapper)
-    expect(trigger.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.find('[role="menu"]').exists()).toBe(true)
+    await wrapper
+      .get('[data-testid="comparison-option-custom"]')
+      .trigger('click')
+    expect(wrapper.emitted('update:preset')).toEqual([['custom']])
+    await wrapper.setProps({ preset: 'custom' })
 
-    await trigger.trigger('keydown', { key: 'Escape' })
-    expect(trigger.attributes('aria-expanded')).toBe('false')
-
-    await openDropdown(wrapper)
-    document.body.click()
-    await wrapper.vm.$nextTick()
-    expect(trigger.attributes('aria-expanded')).toBe('false')
-    wrapper.unmount()
+    await wrapper
+      .get('[data-testid="comparison-custom-start"]')
+      .setValue('2024-01-01')
+    await wrapper
+      .get('[data-testid="comparison-custom-end"]')
+      .setValue('2024-03-31')
+    expect(wrapper.emitted('update:customStartDate')).toEqual([['2024-01-01']])
+    expect(wrapper.emitted('update:customEndDate')).toEqual([['2024-03-31']])
   })
 
-  it('refuses an inverted custom range and says why', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: false,
-        preset: 'custom',
-        customStartDate: '2026-03-01',
-        customEndDate: '2026-01-31',
-      },
+  it('resolves a custom range from the two dates', () => {
+    const wrapper = mountSelector({
+      preset: 'custom',
+      customStartDate: '2024-01-01',
+      customEndDate: '2024-03-31',
     })
-    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:range')?.at(-1)).toEqual([
+      expect.objectContaining({
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        startMonth: '2024-01',
+        endMonth: '2024-03',
+        source: 'custom',
+      }),
+    ])
+    expect(wrapper.get('[data-testid="comparison-range"]').text()).toMatch(
+      /2024/
+    )
+  })
+
+  it('refuses an inverted custom range and says why', () => {
+    const wrapper = mountSelector({
+      preset: 'custom',
+      customStartDate: '2026-03-01',
+      customEndDate: '2026-01-31',
+    })
+
     expect(
       wrapper.find('[data-testid="comparison-custom-inverted"]').exists()
     ).toBe(true)
     expect(wrapper.emitted('update:range')?.at(-1)).toEqual([null])
   })
 
-  it('resolves a "custom" range from the provided date inputs', async () => {
-    const wrapper = mount(ComparisonSelector, {
-      props: {
-        plan: samplePlan,
-        yearAgoAvailable: false,
-        preset: 'custom',
-        customStartDate: '2024-01-01',
-        customEndDate: '2024-03-31',
-      },
-    })
+  it('takes the comparison off with « Aucune »', async () => {
+    const wrapper = mountSelector({ preset: '6m' })
+    expect(wrapper.emitted('update:range')?.at(-1)?.[0]).not.toBeNull()
 
-    const range = wrapper.emitted('update:range')?.at(-1)?.[0]
-    expect(range).toMatchObject({
-      startDate: '2024-01-01',
-      endDate: '2024-03-31',
-      startMonth: '2024-01',
-      endMonth: '2024-03',
-      source: 'custom',
-    })
+    await wrapper.get('[data-testid="comparison-option-none"]').trigger('click')
+    expect(wrapper.emitted('update:preset')).toEqual([['none']])
+    await wrapper.setProps({ preset: 'none' })
+    expect(wrapper.emitted('update:range')?.at(-1)).toEqual([null])
+    expect(
+      wrapper
+        .get('[data-testid="comparison-option-none"]')
+        .attributes('aria-checked')
+    ).toBe('true')
   })
 })

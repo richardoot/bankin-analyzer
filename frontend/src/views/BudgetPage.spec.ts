@@ -17,23 +17,38 @@ vi.mock('vue3-apexcharts/core', () => ({
 }))
 
 const routerPush = vi.fn()
+const routerReplace = vi.fn()
+/**
+ * The route the page reads its actions off (`?edit=1`, `?new=1`, a hash):
+ * reactive, so a test can land on one or follow a line of « À faire ».
+ */
+const currentRoute = vi.hoisted(() => ({
+  query: {} as Record<string, string>,
+  hash: '',
+}))
 /** The guard the page registers, captured so a test can run it. */
 let routeLeaveGuard: (() => boolean) | null = null
-vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: routerPush,
-    resolve: (to: { path: string }) => ({ href: to.path }),
-  }),
-  onBeforeRouteLeave: (guard: () => boolean) => {
-    routeLeaveGuard = guard
-  },
-  // The rows link to the Transactions page; the route is kept on the
-  // element so a test can read it.
-  RouterLink: {
-    props: ['to'],
-    template: '<a :data-to="JSON.stringify(to)" :href="to.path"><slot /></a>',
-  },
-}))
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue')
+  const route = reactive(currentRoute)
+  return {
+    useRouter: () => ({
+      push: routerPush,
+      replace: routerReplace,
+      resolve: (to: { path: string }) => ({ href: to.path }),
+    }),
+    useRoute: () => route,
+    onBeforeRouteLeave: (guard: () => boolean) => {
+      routeLeaveGuard = guard
+    },
+    // The rows link to the Transactions page; the route is kept on the
+    // element so a test can read it.
+    RouterLink: {
+      props: ['to'],
+      template: '<a :data-to="JSON.stringify(to)" :href="to.path"><slot /></a>',
+    },
+  }
+})
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -49,16 +64,76 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    deductPendingReimbursements: false,
-    setDeductPendingReimbursements: vi.fn(),
-  }),
+// The reading lives in the filters store, shared with the dashboard:
+// reactive here, as it is there, and reset before each test.
+const filters = vi.hoisted(() => ({
+  breakdownMode: 'everyday' as 'everyday' | 'real',
+  deductReimbursements: true,
+  deductPendingReimbursements: false,
+  lastSyncError: null as string | null,
 }))
+vi.mock('@/stores/filters', async () => {
+  const { reactive } = await import('vue')
+  const state = reactive(filters)
+  return {
+    useFiltersStore: () => ({
+      get breakdownMode() {
+        return state.breakdownMode
+      },
+      setBreakdownMode: (mode: 'everyday' | 'real') => {
+        state.breakdownMode = mode
+      },
+      get deductReimbursements() {
+        return state.deductReimbursements
+      },
+      setDeductReimbursements: (value: boolean) => {
+        state.deductReimbursements = value
+      },
+      get deductPendingReimbursements() {
+        return state.deductPendingReimbursements
+      },
+      setDeductPendingReimbursements: (value: boolean) => {
+        state.deductPendingReimbursements = value
+      },
+      get lastSyncError() {
+        return state.lastSyncError
+      },
+    }),
+  }
+})
 
 import { api } from '@/lib/api'
+import { useRoute } from 'vue-router'
+
+/** The mocked route, reactive: what the page watches. */
+const liveRoute = useRoute()
 
 enableAutoUnmount(afterEach)
+
+/** « Lecture ▾ » then « Tout »: the reading, from the menu of the header. */
+async function readAll(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+  await wrapper.get('[data-testid="breakdown-mode-real"]').trigger('click')
+  await flushPromises()
+}
+
+/** « Mois lu » on « Moyenne du plan »: the complete months, averaged. */
+async function readAverage(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await wrapper.get('[data-testid="budget-month-average"]').trigger('click')
+  await flushPromises()
+}
+
+/** Into edit mode, then « Comparer avec » on a preset. */
+async function compareWith(
+  wrapper: ReturnType<typeof mount>,
+  preset: '3m' | '6m' | '12m'
+): Promise<void> {
+  await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+  await wrapper
+    .get(`[data-testid="comparison-option-${preset}"]`)
+    .trigger('click')
+  await flushPromises()
+}
 
 const samplePlan: BudgetPlanDto = {
   id: 'plan-1',
@@ -130,6 +205,12 @@ describe('BudgetPage', () => {
       totalSpent: 0,
     })
     localStorage.clear()
+    filters.breakdownMode = 'everyday'
+    filters.deductReimbursements = true
+    filters.deductPendingReimbursements = false
+    filters.lastSyncError = null
+    currentRoute.query = {}
+    currentRoute.hash = ''
   })
 
   describe('empty state', () => {
@@ -150,6 +231,18 @@ describe('BudgetPage', () => {
       ).toBe(false)
       // Statistics are not fetched when no plan
       expect(api.getBudgetStatistics).not.toHaveBeenCalled()
+    })
+
+    it('says a failed load in the page’s error alert, not a hand-made red box', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockRejectedValue(new Error('boom'))
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const alert = wrapper.get('[data-testid="budget-error"]')
+      expect(alert.attributes('role')).toBe('alert')
+      expect(alert.text()).toContain('boom')
+      expect(wrapper.findComponent({ name: 'InlineAlert' }).exists()).toBe(true)
     })
 
     it('opens the wizard when the empty-state CTA is clicked', async () => {
@@ -220,12 +313,12 @@ describe('BudgetPage', () => {
       expect(wrapper.text()).toMatch(/2026/)
     })
 
-    it('renders the filters card and the category list', async () => {
+    it('renders the category list, without a filters card', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
       expect(wrapper.find('[data-testid="budget-filters-card"]').exists()).toBe(
-        true
+        false
       )
       expect(
         wrapper.find('[data-testid="budget-row-Alimentation"]').exists()
@@ -362,12 +455,7 @@ describe('BudgetPage', () => {
         new Error('Le serveur est injoignable.')
       )
 
-      await wrapper.find('[data-testid="comparison-trigger"]').trigger('click')
-      await flushPromises()
-      await wrapper
-        .find('[data-testid="comparison-option-3m"]')
-        .trigger('click')
-      await flushPromises()
+      await compareWith(wrapper, '3m')
 
       expect(
         wrapper.find('[data-testid="budget-statistics-error"]').text()
@@ -384,18 +472,90 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
+    it('mounts one « Comparer avec », on the chart’s card, and keeps the Historique column for edit mode', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      const header = () =>
+        wrapper.get('[data-testid="budget-table-header"]').text()
+
+      // Tracking: the selector on the chart's card, « Aucune » chosen; no
+      // menu button of the old dropdown.
+      const card = wrapper.get('[data-testid="budget-chart-card"]')
+      expect(card.findAll('[data-testid="comparison-selector"]')).toHaveLength(
+        1
+      )
+      expect(
+        card
+          .get('[data-testid="comparison-option-none"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      expect(wrapper.find('[data-testid="comparison-trigger"]').exists()).toBe(
+        false
+      )
+
+      // A comparison chosen in tracking: still no Historique column.
+      await card.get('[data-testid="comparison-option-3m"]').trigger('click')
+      await flushPromises()
+      expect(header()).not.toContain('Historique')
+
+      // Editing: the same selector, the same choice, the column on.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper.findAll('[data-testid="comparison-selector"]')
+      ).toHaveLength(1)
+      expect(header()).toContain('Historique')
+
+      vi.mocked(api.getBudgetStatistics).mockClear()
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      await flushPromises()
+
+      // Out of edit mode: the column goes, the comparison stays — no
+      // refetch back to the plan's own months.
+      expect(header()).not.toContain('Historique')
+      expect(
+        wrapper
+          .get('[data-testid="comparison-option-3m"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      expect(api.getBudgetStatistics).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('says a refetch in a line under the header, where the filters card was', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      let finish: (value: BudgetStatisticsDto) => void = () => {}
+      vi.mocked(api.getBudgetStatistics).mockReturnValueOnce(
+        new Promise(resolve => {
+          finish = resolve
+        })
+      )
+
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="toggle-deduct-reimbursements"]')
+        .trigger('click')
+      await flushPromises()
+
+      const line = wrapper.get('[data-testid="budget-statistics-refreshing"]')
+      expect(line.text()).toBe('Mise à jour des chiffres…')
+      expect(line.attributes('role')).toBe('status')
+
+      finish(sampleStatistics)
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="budget-statistics-refreshing"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
     it('widens the stats fetch range to envelop comparison + plan when comparison is selected', async () => {
       const wrapper = mount(BudgetPage, { attachTo: document.body })
       await flushPromises()
       vi.mocked(api.getBudgetStatistics).mockClear()
 
-      // Open the comparison selector and pick "3 mois précédents"
-      await wrapper.find('[data-testid="comparison-trigger"]').trigger('click')
-      await flushPromises()
-      await wrapper
-        .find('[data-testid="comparison-option-3m"]')
-        .trigger('click')
-      await flushPromises()
+      // In edit mode, « Comparer avec » on « 3 mois ».
+      await compareWith(wrapper, '3m')
 
       expect(api.getBudgetStatistics).toHaveBeenCalledOnce()
       const args = vi.mocked(api.getBudgetStatistics).mock.calls[0]?.[0]
@@ -403,6 +563,144 @@ describe('BudgetPage', () => {
       expect(args?.startDate).toBe('2026-02-01')
       expect(args?.endDate).toBe('2026-05-31')
       wrapper.unmount()
+    })
+  })
+
+  describe('on a phone (« Budget · suivi sur téléphone »)', () => {
+    const originalMatchMedia = window.matchMedia
+
+    beforeEach(() => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(samplePlan)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: 'plan-old',
+          name: 'Avril 2026',
+          startDate: '2026-04-01',
+          endDate: '2026-04-30',
+          monthCount: 1,
+          totalAmount: 200,
+          entryCount: 1,
+          createdAt: '2026-03-20T00:00:00Z',
+        },
+      ])
+      // Every width query answers « narrower »: a 390 px phone.
+      Object.defineProperty(window, 'matchMedia', {
+        value: vi.fn(() => ({
+          matches: true,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+        writable: true,
+        configurable: true,
+      })
+    })
+
+    afterEach(() => {
+      Object.defineProperty(window, 'matchMedia', {
+        value: originalMatchMedia,
+        writable: true,
+        configurable: true,
+      })
+      document.body.innerHTML = ''
+    })
+
+    it('puts Historique and Nouveau budget behind « … », next to « Lecture » as an icon', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="header-history-button"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="header-new-plan-button"]').exists()
+      ).toBe(false)
+      const more = wrapper.get('[data-testid="header-more-button"]')
+      expect(more.attributes('aria-haspopup')).toBe('menu')
+      expect(more.attributes('aria-label')).toContain('Plus d’actions')
+      expect(
+        wrapper.get('[data-testid="reading-menu-label"]').classes()
+      ).toContain('sr-only')
+
+      await more.trigger('click')
+      const sheet = document.body.querySelector(
+        '[data-testid="header-more-sheet"]'
+      )
+      expect(sheet).not.toBeNull()
+      const items = Array.from(
+        sheet?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []
+      )
+      expect(items.map(i => i.textContent?.trim())).toEqual([
+        'Historique des budgets',
+        'Nouveau budget',
+      ])
+
+      items[1]?.click()
+      await flushPromises()
+      expect(
+        document.body.querySelector('[data-testid="header-more-sheet"]')
+      ).toBeNull()
+      expect(
+        document.body.querySelector('[data-testid="new-budget-plan-modal"]')
+      ).not.toBeNull()
+    })
+
+    it('opens the history from « … »', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      await wrapper.get('[data-testid="header-more-button"]').trigger('click')
+      document.body
+        .querySelector<HTMLButtonElement>('[data-testid="header-more-history"]')
+        ?.click()
+      await flushPromises()
+      expect(
+        wrapper.findComponent({ name: 'BudgetPlansHistoryModal' }).props('open')
+      ).toBe(true)
+    })
+
+    it('locks « … » while the envelopes are edited', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+
+      expect(
+        (
+          wrapper.get('[data-testid="header-more-button"]')
+            .element as HTMLButtonElement
+        ).disabled
+      ).toBe(true)
+    })
+
+    it('says « Mois lu » as a link, keeps the four lines folded and the rows without mini-columns', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      expect(
+        wrapper
+          .get('[data-testid="budget-month-read-trigger"]')
+          .text()
+          .replace(/\s+/g, ' ')
+      ).toBe('Mois lu : le plan ▾')
+      expect(wrapper.find('[data-testid="budget-month-read"]').exists()).toBe(
+        false
+      )
+      // Projets, Achats lissés, the chart and the grid: all folded.
+      const folded = wrapper.get('[data-testid="budget-folded-lines"]')
+      for (const button of folded.findAll('button[aria-expanded]')) {
+        expect(button.attributes('aria-expanded')).toBe('false')
+      }
+      for (const details of folded.findAll('details')) {
+        expect((details.element as HTMLDetailsElement).open).toBe(false)
+      }
+      // Each envelope: its figure and a bar, no chart of months.
+      const food = wrapper.get('[data-testid="budget-row-Alimentation"]')
+      expect(
+        food.find('[data-testid="budget-bar-Alimentation"]').exists()
+      ).toBe(true)
+      expect(
+        food.findComponent(MonthsVsBudgetChart).element.parentElement?.className
+      ).toContain('hidden')
     })
   })
 
@@ -717,7 +1015,7 @@ describe('BudgetPage', () => {
 
       expect(
         wrapper.find('[data-testid="budget-dirty-count"]').text()
-      ).toContain('1 catégorie')
+      ).toContain('1 enveloppe modifiée')
       expect(
         wrapper.find('[data-testid="budget-draft-delta"]').text()
       ).toContain('+')
@@ -874,6 +1172,282 @@ describe('BudgetPage', () => {
       expect(input.value).toBe('300')
     })
 
+    it('reads « Planification » in place of « Ce mois-ci » while editing', async () => {
+      // Within the plan's month, so the band of the month reads.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T12:00:00Z'))
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(
+        wrapper.find('[data-testid="budget-planning-band"]').exists()
+      ).toBe(false)
+
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        false
+      )
+      const band = wrapper.get('[data-testid="budget-planning-band"]')
+      expect(band.text()).toContain('Planification · Mai 2026')
+      for (const tile of [
+        'reference-income',
+        'total',
+        'savings-planned',
+        'margin',
+      ]) {
+        expect(band.find(`[data-testid="budget-tile-${tile}"]`).exists()).toBe(
+          true
+        )
+      }
+
+      // Back to the month on « Annuler ».
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(
+        wrapper.find('[data-testid="budget-planning-band"]').exists()
+      ).toBe(false)
+
+      // And on « Enregistrer ».
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue(samplePlan)
+      await wrapper.get('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(
+        wrapper.find('[data-testid="budget-planning-band"]').exists()
+      ).toBe(false)
+    })
+
+    it('says the same total in the band and the bar, at each keystroke', async () => {
+      const wrapper = await mountEditing()
+      const bandTotal = () =>
+        wrapper.get('[data-testid="budget-planning-value-total"]').text()
+      expect(bandTotal()).toContain('250')
+
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      await wrapper.get('[data-testid="budget-input-Transport"]').setValue('80')
+
+      // 300 + 80, over every entry: one sum for both.
+      expect(bandTotal()).toContain('380')
+      expect(
+        wrapper.get('[data-testid="budget-edit-draft-total"]').text()
+      ).toContain('380')
+      const bandBadge = wrapper.get('[data-testid="budget-badge-total"]')
+      const barBadge = wrapper.get('[data-testid="budget-draft-delta"]')
+      expect(bandBadge.text()).toContain('+130')
+      expect(barBadge.text()).toContain('+130')
+      expect(bandBadge.attributes('data-tone')).toBe('over')
+      expect(barBadge.attributes('data-tone')).toBe('over')
+      expect(
+        wrapper.get('[data-testid="budget-detail-total"]').text()
+      ).toContain('2 enveloppes modifiées')
+    })
+
+    it('saves a reference income typed in « Planification », and « Annuler » drops it', async () => {
+      // May still running: no closed month, the savings read the
+      // reference income typed.
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-05-15T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        savingsTarget: 400,
+        referenceIncome: null,
+      })
+      const wrapper = await mountEditing()
+      const income = () =>
+        wrapper.get('[data-testid="budget-reference-income-input"]')
+      expect(
+        wrapper.get('[data-testid="budget-tile-reference-income"]').text()
+      ).toContain('non renseignés')
+      expect(
+        wrapper
+          .find('[data-testid="budget-savings-planned-no-income"]')
+          .exists()
+      ).toBe(true)
+
+      await income().setValue('2000')
+      // 2 000 − 250 planned, 1 350 left for projects a month.
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-savings"]').text()
+      ).toMatch(/1\s750/)
+      expect(
+        wrapper.get('[data-testid="budget-detail-savings-planned"]').text()
+      ).toMatch(/réserve projets 1\s350\s€ × 1 mois = 1\s350\s€/)
+
+      // The income alone is a change worth saving.
+      const save = wrapper.get('[data-testid="budget-save-button"]')
+      expect((save.element as HTMLButtonElement).disabled).toBe(false)
+
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect((income().element as HTMLInputElement).value).toBe('')
+
+      await income().setValue('2000')
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        referenceIncome: 2000,
+      })
+      await wrapper.get('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+      expect(vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ referenceIncome: 2000 })
+      )
+    })
+
+    it('plans the savings on the closed months’ income, whatever reference income is typed', async () => {
+      // A May → June plan read mid-June: May closed with 2 500 received,
+      // 2 000 typed as the reference.
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        endDate: '2026-06-30',
+        monthCount: 2,
+        savingsTarget: 400,
+        referenceIncome: 2000,
+      })
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 2,
+        monthLabels: ['2026-05', '2026-06'],
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 400,
+            transactionCount: 5,
+            averagePerMonth: 200,
+            monthlyAmounts: [320, 80],
+          },
+        ],
+        incomeByCategory: [
+          {
+            categoryId: 'cat-salary',
+            categoryName: 'Salaire',
+            totalAmount: 2500,
+            transactionCount: 1,
+            averagePerMonth: 1250,
+            monthlyAmounts: [2500, 0],
+          },
+        ],
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      // « Ce mois-ci »: 2 500 − 250.
+      expect(
+        wrapper.get('[data-testid="budget-month-value-savings"]').text()
+      ).toMatch(/2\s250/)
+      expect(
+        wrapper.get('[data-testid="budget-savings-basis"]').text()
+      ).toMatch(/revenus moyens de 1 mois clos \(2\s500\s€\)/)
+
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-savings"]').text()
+      ).toMatch(/2\s250/)
+      await wrapper
+        .get('[data-testid="budget-reference-income-input"]')
+        .setValue('3000')
+      // The typed income does not move the savings: the real one does.
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-savings"]').text()
+      ).toMatch(/2\s250/)
+      expect(
+        wrapper.get('[data-testid="budget-savings-planned-basis"]').text()
+      ).toContain('revenus moyens de 1 mois clos')
+    })
+
+    it('leaves the reference income out of a save that does not change it', async () => {
+      const wrapper = await mountEditing()
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue(samplePlan)
+      await wrapper.get('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+      expect(
+        vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]
+      ).not.toHaveProperty('referenceIncome')
+    })
+
+    it('weighs the draft against the comparison in « Marge vs historique »', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper.get('[data-testid="budget-tile-margin"]').text()
+      ).toContain('Aucune comparaison choisie')
+      expect(
+        wrapper.find('[data-testid="budget-choose-comparison"]').exists()
+      ).toBe(true)
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 1220,
+            transactionCount: 20,
+            averagePerMonth: 305,
+            monthlyAmounts: [300, 300, 300, 320],
+          },
+          {
+            categoryId: 'cat-transport',
+            categoryName: 'Transport',
+            categoryIcon: '🚗',
+            totalAmount: 400,
+            transactionCount: 8,
+            averagePerMonth: 100,
+            monthlyAmounts: [100, 100, 100, 100],
+          },
+        ],
+        monthLabels: ['2026-02', '2026-03', '2026-04', '2026-05'],
+      })
+      await compareWith(wrapper, '3m')
+
+      // History 400 € a month, the plan 250 €: 150 € tighter, said amber.
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-margin"]').text()
+      ).toContain('−150')
+      const badge = wrapper.get('[data-testid="budget-badge-margin"]')
+      expect(badge.attributes('data-tone')).toBe('over')
+      expect(
+        wrapper.get('[data-testid="budget-detail-margin"]').text()
+      ).toContain('historique 400')
+      wrapper.unmount()
+    })
+
+    it('brings « Planification » into view on entering edit mode', async () => {
+      const scroll = vi.fn()
+      const original = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = scroll
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      await flushPromises()
+      expect(scroll).toHaveBeenCalled()
+      expect(scroll.mock.contexts[0]).toBe(
+        wrapper.get('[data-testid="budget-planning-band"]').element
+      )
+      Element.prototype.scrollIntoView = original
+      wrapper.unmount()
+    })
+
     it('warns before editing the envelopes of a finished plan', async () => {
       vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
         ...samplePlan,
@@ -969,8 +1543,9 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      // The actual is the figure, the envelope its reference.
-      expect(foodRow(wrapper).text()).toMatch(/350/)
+      // The actual is the figure, the envelope its reference: August's,
+      // the month read by default.
+      expect(foodRow(wrapper).text()).toMatch(/200/)
       expect(
         wrapper.get('[data-testid="budget-value-Alimentation"]').text()
       ).toMatch(/^sur 300\s€$/)
@@ -980,7 +1555,7 @@ describe('BudgetPage', () => {
         values: [500, 200, 200],
         budget: 300,
         runningMonth: '2026-08',
-        selectedMonth: undefined,
+        selectedMonth: '2026-08',
       })
       expect(
         wrapper.get('[data-testid="budget-months-header"]').text()
@@ -1037,6 +1612,15 @@ describe('BudgetPage', () => {
         (table.element as HTMLElement).style.getPropertyValue('--row-grid')
       ).toBe('1fr auto auto')
       expect(table.text()).not.toContain('Mois du plan')
+      // The band says when it begins, without spending or « Mois lu ».
+      const band = wrapper.get('[data-testid="budget-month-band"]')
+      expect(band.text()).toContain('Le plan commence le 1er septembre')
+      expect(band.find('[data-testid="budget-tile-spent"]').exists()).toBe(
+        false
+      )
+      expect(band.find('[data-testid="budget-month-selector"]').exists()).toBe(
+        false
+      )
       wrapper.unmount()
     })
 
@@ -1057,15 +1641,27 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('averages the complete months until a month is picked', async () => {
+    it('reads the running month by default, the average on demand', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      // (500 + 200) / 2 = 350 — August is still running and stays out.
-      expect(foodRow(wrapper).text()).toMatch(/350/)
       expect(
-        wrapper.find('[data-testid="budget-actual-period"]').text()
-      ).toContain('2 mois')
+        wrapper
+          .get('[data-testid="budget-month-2026-08"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      expect(foodRow(wrapper).text()).toMatch(/200/)
+
+      // (500 + 200) / 2 = 350 — August is still running and stays out.
+      await readAverage(wrapper)
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+      expect(wrapper.get('[data-testid="budget-month-title"]').text()).toBe(
+        'Moyenne du plan · 2 mois clos'
+      )
+      // The month read is said by the band, no longer under the table.
+      expect(
+        wrapper.find('[data-testid="budget-actual-period"]').exists()
+      ).toBe(false)
       wrapper.unmount()
     })
 
@@ -1095,9 +1691,9 @@ describe('BudgetPage', () => {
         .trigger('click')
 
       expect(foodRow(wrapper).text()).toMatch(/200/)
-      const period = wrapper.find('[data-testid="budget-actual-period"]').text()
-      expect(period).toContain('Août 2026')
-      expect(period).toContain('20/31')
+      expect(wrapper.get('[data-testid="budget-month-title"]').text()).toBe(
+        'Ce mois-ci · août, au 20'
+      )
       wrapper.unmount()
     })
 
@@ -1139,7 +1735,7 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('isolates a month from the period band only — the chart just follows', async () => {
+    it('isolates a month from « Mois lu » only — the chart just follows', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
@@ -1147,13 +1743,230 @@ describe('BudgetPage', () => {
       const chart = wrapper.findComponent({ name: 'MonthlyExpensesChart' })
       chart.vm.$emit('select-month', '2026-06')
       await flushPromises()
-      expect(foodRow(wrapper).text()).toMatch(/350/)
+      expect(foodRow(wrapper).text()).toMatch(/200/)
+      expect(foodRow(wrapper).text()).not.toMatch(/500/)
 
       await wrapper
         .find('[data-testid="budget-month-2026-06"]')
         .trigger('click')
       expect(foodRow(wrapper).text()).toMatch(/500/)
       wrapper.unmount()
+    })
+
+    describe('the chart before the envelopes, the grid folded under them', () => {
+      const originalMatchMedia = window.matchMedia
+
+      function stubWidth(belowMd: boolean): void {
+        Object.defineProperty(window, 'matchMedia', {
+          value: vi.fn(() => ({
+            matches: belowMd,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+          })),
+          writable: true,
+          configurable: true,
+        })
+      }
+
+      afterEach(() => {
+        Object.defineProperty(window, 'matchMedia', {
+          value: originalMatchMedia,
+          writable: true,
+          configurable: true,
+        })
+      })
+
+      const detailsOf = (w: ReturnType<typeof mount>, id: string) =>
+        w.get(`[data-testid="${id}"]`).element as HTMLDetailsElement
+
+      it('sets the chart in its card between the band and the envelopes, the grid last of the folded lines', async () => {
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        const folded = wrapper.get('[data-testid="budget-folded-lines"]')
+        const ids = [...folded.element.children].map(el =>
+          el.getAttribute('data-testid')
+        )
+        expect(ids.at(-1)).toBe('budget-matrix-details')
+        expect(ids).not.toContain('budget-chart-details')
+        const card = wrapper.get('[data-testid="budget-chart-card"]')
+        expect(card.element.tagName).toBe('SECTION')
+        expect(detailsOf(wrapper, 'budget-chart-details').tagName).toBe(
+          'DETAILS'
+        )
+        expect(
+          wrapper.get('[data-testid="budget-chart-toggle"]').text()
+        ).toContain('Dépenses et enveloppe par mois')
+        expect(
+          wrapper.get('[data-testid="budget-matrix-toggle"]').text()
+        ).toContain('Mois par mois')
+        const follows = (a: Element, b: Element) =>
+          (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !==
+          0
+        const band = wrapper.get('[data-testid="budget-month-band"]').element
+        const table = wrapper.get('[data-testid="budget-table"]').element
+        expect(follows(band, card.element)).toBe(true)
+        expect(follows(card.element, table)).toBe(true)
+        wrapper.unmount()
+      })
+
+      it('opens the chart on a desk and folds the grid', async () => {
+        stubWidth(false)
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        expect(detailsOf(wrapper, 'budget-chart-details').open).toBe(true)
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(true)
+        expect(detailsOf(wrapper, 'budget-matrix-details').open).toBe(false)
+        // The grid is there, folded: the details hides it.
+        expect(
+          wrapper
+            .get('[data-testid="budget-matrix-details"]')
+            .find('[data-testid="budget-monthly-matrix"]')
+            .exists()
+        ).toBe(true)
+        wrapper.unmount()
+      })
+
+      it('folds both below md, and draws the chart once opened', async () => {
+        stubWidth(true)
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        const chart = detailsOf(wrapper, 'budget-chart-details')
+        expect(chart.open).toBe(false)
+        expect(detailsOf(wrapper, 'budget-matrix-details').open).toBe(false)
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(false)
+
+        chart.open = true
+        await wrapper
+          .get('[data-testid="budget-chart-details"]')
+          .trigger('toggle')
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(true)
+        wrapper.unmount()
+      })
+
+      it('hands the chart the page’s month, read in UTC like the plan', async () => {
+        // The last half hour of August in UTC: already September in Paris.
+        vi.setSystemTime(new Date('2026-08-31T23:30:00Z'))
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
+            .currentMonth
+        ).toBe('2026-08')
+        wrapper.unmount()
+      })
+
+      it('hands the chart the comparison chosen in tracking, and keeps it out of edit mode', async () => {
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        const chartProps = () =>
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
+        expect(chartProps().planStartMonth).toBe('2026-06')
+        expect(chartProps().comparisonStartMonth).toBeUndefined()
+
+        // « Comparer avec » on the chart's card, without editing.
+        const card = wrapper.get('[data-testid="budget-chart-card"]')
+        await card.get('[data-testid="comparison-option-3m"]').trigger('click')
+        await flushPromises()
+        expect(chartProps().comparisonStartMonth).toBe('2026-03')
+        expect(chartProps().comparisonEndMonth).toBe('2026-05')
+
+        // In and out of edit mode: the choice stays.
+        await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+        await wrapper
+          .get('[data-testid="budget-cancel-button"]')
+          .trigger('click')
+        await flushPromises()
+        expect(chartProps().comparisonStartMonth).toBe('2026-03')
+        expect(
+          card
+            .get('[data-testid="comparison-option-3m"]')
+            .attributes('aria-checked')
+        ).toBe('true')
+
+        // « Aucune » takes it off.
+        await card
+          .get('[data-testid="comparison-option-none"]')
+          .trigger('click')
+        await flushPromises()
+        expect(chartProps().comparisonStartMonth).toBeUndefined()
+        wrapper.unmount()
+      })
+
+      it('hands the chart the events of each month in « Tout » only', async () => {
+        vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+          ...sampleStatistics,
+          periodMonths: 7,
+          monthLabels: [
+            '2026-06',
+            '2026-07',
+            '2026-08',
+            '2026-09',
+            '2026-10',
+            '2026-11',
+            '2026-12',
+          ],
+          expensesByCategory: [
+            {
+              categoryId: 'cat-food',
+              categoryName: 'Alimentation',
+              categoryIcon: '🍽️',
+              totalAmount: 900,
+              transactionCount: 12,
+              averagePerMonth: 128,
+              monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+              // June held a 300 € holiday.
+              everydayMonthlyAmounts: [200, 200, 200, 0, 0, 0, 0],
+            },
+          ],
+        })
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+        const chartProps = () =>
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
+
+        // « Vie courante »: the events are out of the columns.
+        expect(chartProps().exceptionalTotals).toBeUndefined()
+
+        await readAll(wrapper)
+        expect(chartProps().exceptionalTotals).toEqual([300, 0, 0, 0, 0, 0, 0])
+        expect(chartProps().monthlyTotals?.[0]).toBe(500)
+        wrapper.unmount()
+      })
+
+      it('keeps the chart’s card for its selector on a plan with a single started month', async () => {
+        vi.setSystemTime(new Date('2026-06-10T12:00:00Z'))
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        // One column is no chart, but « Comparer avec » can draw a second.
+        expect(wrapper.find('[data-testid="budget-chart-card"]').exists()).toBe(
+          true
+        )
+        expect(
+          wrapper.find('[data-testid="comparison-selector"]').exists()
+        ).toBe(true)
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).exists()
+        ).toBe(false)
+        expect(
+          wrapper.find('[data-testid="budget-chart-one-month"]').exists()
+        ).toBe(true)
+        expect(
+          wrapper.find('[data-testid="budget-matrix-details"]').exists()
+        ).toBe(false)
+        wrapper.unmount()
+      })
     })
 
     it('lays the plan out month by month, envelope beside spending', async () => {
@@ -1184,7 +1997,8 @@ describe('BudgetPage', () => {
       const header = wrapper.find('[data-testid="matrix-header-2026-06"]')
       expect(header.element.tagName).not.toBe('BUTTON')
       await header.trigger('click')
-      expect(foodRow(wrapper).text()).toMatch(/350/)
+      expect(foodRow(wrapper).text()).toMatch(/200/)
+      expect(foodRow(wrapper).text()).not.toMatch(/500/)
 
       await wrapper
         .find('[data-testid="budget-month-2026-06"]')
@@ -1209,7 +2023,6 @@ describe('BudgetPage', () => {
     })
 
     it('reads the grid through the active breakdown mode', async () => {
-      localStorage.setItem('budget-breakdown-mode', 'everyday')
       vi.mocked(api.getBudgetStatistics).mockResolvedValue({
         ...sampleStatistics,
         periodMonths: 7,
@@ -1241,7 +2054,57 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('names the isolated month in the tracking summary', async () => {
+    it('leaves the error alone when a running plan’s figures fail to load', async () => {
+      vi.mocked(api.getBudgetStatistics).mockRejectedValue(new Error('boom'))
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="budget-error"]').text()).toContain(
+        'boom'
+      )
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.text()).not.toContain('Le plan commence le')
+      wrapper.unmount()
+    })
+
+    it('keeps the choice of reading when the month read has no event but another plan month has', async () => {
+      // Read on 20 August, the running month by default: the event was June’s.
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+            everydayMonthlyAmounts: [180, 200, 200, 0, 0, 0, 0],
+          },
+        ],
+        incomeByCategory: [],
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.get('[data-testid="budget-month-title"]').text()
+      ).toContain('Ce mois-ci')
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="breakdown-mode-real"]').exists()).toBe(
+        true
+      )
+      wrapper.unmount()
+    })
+
+    it('names the isolated month in the band of the month', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
@@ -1249,10 +2112,108 @@ describe('BudgetPage', () => {
         .find('[data-testid="budget-month-2026-06"]')
         .trigger('click')
 
-      const summary = wrapper.findComponent({ name: 'BudgetSavingsSummary' })
-      expect(summary.props('actualPeriodLabel')).toBe('Juin 2026')
+      expect(wrapper.get('[data-testid="budget-month-title"]').text()).toBe(
+        'Juin'
+      )
       // And the figures follow the same month rather than the average.
-      expect(summary.props('planActualExpenseAvg')).toBeCloseTo(500, 2)
+      expect(
+        wrapper
+          .get('[data-testid="budget-month-value-spent"]')
+          .text()
+          .replace(/\s+/g, ' ')
+      ).toBe('500 €')
+      wrapper.unmount()
+    })
+
+    it('opens on « Ce mois-ci », above the table, in place of the old summary', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const band = wrapper.get('[data-testid="budget-month-band"]')
+      expect(
+        wrapper.findComponent({ name: 'BudgetSavingsSummary' }).exists()
+      ).toBe(false)
+      expect(wrapper.find('[data-testid="savings-summary"]').exists()).toBe(
+        false
+      )
+      const table = wrapper.get('[data-testid="budget-table"]')
+      expect(
+        band.element.compareDocumentPosition(table.element) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+      // « Mois lu » lives in the band, not in the controls of the table.
+      expect(band.find('[data-testid="budget-month-selector"]').exists()).toBe(
+        true
+      )
+      expect(band.text()).toContain('Mois lu')
+      // August, on its 20th: 200 € against 300 × 20/31 ≈ 194 € to date.
+      expect(
+        band
+          .get('[data-testid="budget-month-value-spent"]')
+          .text()
+          .replace(/\s+/g, ' ')
+      ).toBe('200 €')
+      expect(band.get('[data-testid="budget-badge-remaining"]').text()).toBe(
+        'pour 11 jours'
+      )
+      // « Moyenne du plan » stays on offer.
+      expect(band.find('[data-testid="budget-month-average"]').exists()).toBe(
+        true
+      )
+      wrapper.unmount()
+    })
+
+    it('brings the first envelope spent past into view', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      // June: 500 € on a 300 € envelope.
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
+
+      const row = document.getElementById('budget-row-cat-food')
+      expect(row).not.toBeNull()
+      const scroll = vi.fn()
+      if (row) row.scrollIntoView = scroll
+      expect(wrapper.get('[data-testid="budget-badge-envelopes"]').text()).toBe(
+        'Alimentation'
+      )
+      await wrapper
+        .get('[data-testid="budget-envelopes-link"]')
+        .trigger('click')
+      expect(scroll).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('keeps the user’s month across a refetch, and drops it on a plan switch', async () => {
+      vi.mocked(api.getBudgetPlan).mockResolvedValue({
+        ...planJunDec,
+        id: 'plan-other',
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await readAverage(wrapper)
+
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="toggle-deduct-reimbursements"]')
+        .trigger('click')
+      await flushPromises()
+      expect(
+        wrapper
+          .get('[data-testid="budget-month-average"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+
+      wrapper
+        .findComponent({ name: 'BudgetPlansHistoryModal' })
+        .vm.$emit('select', 'plan-other')
+      await flushPromises()
+      expect(
+        wrapper
+          .get('[data-testid="budget-month-2026-08"]')
+          .attributes('aria-checked')
+      ).toBe('true')
       wrapper.unmount()
     })
   })
@@ -1303,8 +2264,7 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       // 320 spent against a 250 envelope.
       expect(foodRow(wrapper).text()).toContain('Dépassé')
@@ -1321,8 +2281,7 @@ describe('BudgetPage', () => {
         .text()
         .replace(/\s+/g, ' ')
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       const after = wrapper
         .get('[data-testid="budget-row-Transport"]')
@@ -1350,8 +2309,7 @@ describe('BudgetPage', () => {
       expect(chip.text()).toContain('hors')
       expect(chip.text()).toMatch(/120/)
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       expect(
         wrapper.get('[data-testid="budget-exceptional-Alimentation"]').text()
@@ -1369,71 +2327,125 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('hides the mode selector when no event touches the plan', async () => {
+    it('stacks the events hatched on the drill-down chart in the real reading only', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const foodProps = () =>
+        wrapper
+          .findAllComponents({ name: 'BudgetCategoryRow' })
+          .find(row => row.props('category').categoryName === 'Alimentation')
+          ?.props()
+
+      // « Vie courante »: the events are out of the figures, out of the chart.
+      expect(foodProps()?.chartOverlay).toBeUndefined()
+      expect(foodProps()?.chartData.values).toEqual([200])
+
+      await readAll(wrapper)
+
+      // « Tout »: the rest of the month, the events stacked on it.
+      expect(foodProps()?.chartOverlay).toEqual({
+        values: [120],
+        label: 'événements',
+      })
+      expect(foodProps()?.chartData.values).toEqual([200])
+      // Never on a category no event touched.
+      expect(
+        wrapper
+          .findAllComponents({ name: 'BudgetCategoryRow' })
+          .find(row => row.props('category').categoryName === 'Transport')
+          ?.props('chartOverlay')
+      ).toBeUndefined()
+
+      wrapper.unmount()
+    })
+
+    it('offers the reading in the « Lecture » menu of the header, not in a band of the table', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The same menu as the dashboard's, saying the state on its button.
+      const button = wrapper.get('[data-testid="reading-menu-button"]')
+      expect(button.text()).toBe(
+        'Lecture : vie courante · remboursements reçus déduits'
+      )
+      // No grey band, no chips of events above the table.
+      expect(
+        wrapper.find('[data-testid="budget-breakdown-mode"]').exists()
+      ).toBe(false)
+      expect(wrapper.find('[data-testid="budget-mode-real"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid^="budget-event-"]').exists()).toBe(
+        false
+      )
+
+      // « Tout » is written to the store, the one reading of every page.
+      await readAll(wrapper)
+      expect(filters.breakdownMode).toBe('real')
+      expect(foodRow(wrapper).text()).toContain('Dépassé')
+
+      wrapper.unmount()
+    })
+
+    it('opens on the reading the store keeps', async () => {
+      filters.breakdownMode = 'real'
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(foodRow(wrapper).text()).toContain('Dépassé')
+      wrapper.unmount()
+    })
+
+    it('does not offer the choice of reading when no event touches the plan', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
 
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      expect(
-        wrapper.find('[data-testid="budget-breakdown-mode"]').exists()
-      ).toBe(false)
+      const button = wrapper.get('[data-testid="reading-menu-button"]')
+      expect(button.text()).toBe('Lecture : remboursements reçus déduits')
+      await button.trigger('click')
+      expect(wrapper.find('[data-testid="breakdown-mode-real"]').exists()).toBe(
+        false
+      )
 
       wrapper.unmount()
     })
 
-    it('lists the events overlapping the window and links to their analysis', async () => {
-      vi.mocked(api.getTags).mockResolvedValue([
-        {
-          id: 'tag-trip',
-          name: 'Vacances Italie',
-          color: '#06b6d4',
-          icon: null,
-          transactionCount: 5,
-          isExceptional: true,
-          eventStartDate: '2026-05-10',
-          eventEndDate: '2026-05-14',
-          budgetAmount: null,
-          status: 'past',
-          familyId: null,
-          family: null,
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-        },
-        {
-          // Outside the plan window → not listed.
-          id: 'tag-ski',
-          name: 'Week-end Ski',
-          color: null,
-          icon: null,
-          transactionCount: 3,
-          isExceptional: true,
-          eventStartDate: '2025-01-10',
-          eventEndDate: '2025-01-12',
-          budgetAmount: null,
-          status: 'past',
-          familyId: null,
-          family: null,
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-        },
-      ])
-
+    it('refetches the figures from the menu’s switches, kept in the store', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
+      vi.mocked(api.getBudgetStatistics).mockClear()
 
-      const chip = wrapper.get('[data-testid="budget-event-Vacances Italie"]')
-      expect(
-        wrapper.find('[data-testid="budget-event-Week-end Ski"]').exists()
-      ).toBe(false)
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="toggle-deduct-reimbursements"]')
+        .trigger('click')
+      await flushPromises()
 
-      await chip.trigger('click')
-      expect(routerPush).toHaveBeenCalledWith('/tags/tag-trip')
+      expect(filters.deductReimbursements).toBe(false)
+      expect(api.getBudgetStatistics).toHaveBeenLastCalledWith(
+        expect.objectContaining({ deductReimbursements: false })
+      )
+
+      await wrapper
+        .get('[data-testid="toggle-deduct-pending"]')
+        .trigger('click')
+      await flushPromises()
+      expect(filters.deductPendingReimbursements).toBe(true)
+      expect(api.getBudgetStatistics).toHaveBeenLastCalledWith(
+        expect.objectContaining({ deductPendingReimbursements: true })
+      )
 
       wrapper.unmount()
     })
 
-    it('surfaces the plan equation and flags a plan that does not add up', async () => {
+    it('weighs the planned savings against the decided ones in the band, not the header', async () => {
+      // « Ce mois-ci » reads a running plan: a finished one reads its review.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T12:00:00Z'))
       vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
         ...samplePlan,
         savingsTarget: 1900,
@@ -1444,20 +2456,43 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      const band = wrapper.get('[data-testid="plan-project-reserve"]')
-      expect(band.text()).toContain('ne tient pas')
-      expect(band.text().replace(/\s+/g, ' ')).toMatch(/1\s?900|1900/)
+      // The header no longer carries the equation.
+      expect(
+        wrapper.find('[data-testid="plan-project-reserve"]').exists()
+      ).toBe(false)
+      // 2 000 − 250 = 1 750 planned, 150 short of the 1 900 decided.
+      const tile = wrapper.get('[data-testid="budget-tile-savings"]')
+      expect(tile.text().replace(/\s+/g, ' ')).toContain(
+        '1 750 € par mois prévus'
+      )
+      const badge = tile.get('[data-testid="budget-badge-savings"]')
+      expect(badge.text().replace(/\s+/g, ' ')).toBe(
+        '−150 € vs 1 900 € décidés'
+      )
+      expect(badge.attributes('data-tone')).toBe('over')
 
       wrapper.unmount()
     })
 
-    it('hides the equation on a plan created without one', async () => {
+    it('says a plan created without a reference income, with the way to edit it', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T12:00:00Z'))
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
       expect(
         wrapper.find('[data-testid="plan-project-reserve"]').exists()
       ).toBe(false)
+      const tile = wrapper.get('[data-testid="budget-tile-savings"]')
+      expect(tile.text()).toContain('Revenus de référence non renseignés')
+      await tile.get('[data-testid="budget-savings-edit"]').trigger('click')
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(true)
+      // The way leads to the field: « Planification » carries it.
+      expect(
+        wrapper.find('[data-testid="budget-reference-income-input"]').exists()
+      ).toBe(true)
 
       wrapper.unmount()
     })
@@ -1529,6 +2564,13 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
+      // The projects wait folded under the envelopes.
+      expect(
+        wrapper.find('[data-testid="project-Vacances Italie"]').exists()
+      ).toBe(false)
+      await wrapper
+        .get('[data-testid="budget-projects-toggle"]')
+        .trigger('click')
       const chip = wrapper.get('[data-testid="project-Vacances Italie"]')
       // A project with no envelope is shown as such, not as a zero.
       expect(chip.text()).toContain('sans enveloppe')
@@ -1539,13 +2581,67 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('hides the projects band when nothing overlaps the plan', async () => {
+    it('hides the projects line when nothing overlaps the plan', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
-        false
-      )
+      expect(
+        wrapper.find('[data-testid="budget-projects-line"]').exists()
+      ).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('lists the plan’s events in the projects line, the others left out', async () => {
+      vi.mocked(api.getTags).mockResolvedValue([
+        {
+          id: 'tag-trip',
+          name: 'Vacances Italie',
+          color: '#06b6d4',
+          isExceptional: true,
+          eventStartDate: '2026-05-10',
+          eventEndDate: '2026-05-14',
+        },
+        {
+          id: 'tag-old',
+          name: 'Noël 2025',
+          color: null,
+          isExceptional: true,
+          eventStartDate: '2025-12-20',
+          eventEndDate: '2025-12-26',
+        },
+        {
+          id: 'tag-party',
+          name: 'Soirée',
+          color: null,
+          isExceptional: true,
+          eventStartDate: null,
+          eventEndDate: null,
+        },
+        {
+          id: 'tag-plain',
+          name: 'Courses',
+          color: null,
+          isExceptional: false,
+          eventStartDate: '2026-05-01',
+          eventEndDate: '2026-05-02',
+        },
+      ] as Awaited<ReturnType<typeof api.getTags>>)
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const line = wrapper.get('[data-testid="budget-projects-line"]')
+      await line.get('[data-testid="budget-projects-toggle"]').trigger('click')
+      expect(
+        line
+          .findAll('[data-testid^="project-event-"]')
+          .map(el => el.attributes('data-testid'))
+      ).toEqual(['project-event-Vacances Italie'])
+      await line
+        .get('[data-testid="project-event-Vacances Italie"]')
+        .trigger('click')
+      expect(routerPush).toHaveBeenCalledWith('/tags/tag-trip')
 
       wrapper.unmount()
     })
@@ -1572,13 +2668,16 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      // The band still lists the project…
-      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
-        true
-      )
+      // The line still lists the project…
+      expect(
+        wrapper.find('[data-testid="budget-projects-line"]').exists()
+      ).toBe(true)
       // …but there is no reserve to charge it against.
       expect(wrapper.find('[data-testid="reserve-remaining"]').exists()).toBe(
         false
+      )
+      expect(wrapper.get('[data-testid="projects-no-reserve"]').text()).toBe(
+        'pas de réserve'
       )
 
       wrapper.unmount()
@@ -1586,7 +2685,6 @@ describe('BudgetPage', () => {
 
     it('degrades to the raw series when the backend sent no split', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
-      localStorage.setItem('budget-breakdown-mode', 'everyday')
 
       const wrapper = mount(BudgetPage)
       await flushPromises()
@@ -1651,9 +2749,27 @@ describe('BudgetPage', () => {
       vi.useRealTimers()
     })
 
-    it('links the « Réel » figure to the plan so far, gross', async () => {
+    it('links the « Réel » figure to the month read, gross', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
+
+      const link = wrapper.get(
+        '[data-testid="budget-actual-link-Alimentation"]'
+      )
+      expect(
+        JSON.parse(link.attributes('data-to') ?? '{}').query
+      ).toMatchObject({
+        category: 'cat-food',
+        from: '2026-08-01',
+        to: '2026-08-31',
+        gross: '1',
+      })
+    })
+
+    it('links the « Réel » figure to the plan so far on the average, gross', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await readAverage(wrapper)
 
       const link = wrapper.get(
         '[data-testid="budget-actual-link-Alimentation"]'
@@ -1701,6 +2817,24 @@ describe('BudgetPage', () => {
       })
       const wrapper = mount(BudgetPage)
       await flushPromises()
+
+      // Tracking: no comparison chosen, no Historique column.
+      const grid = () =>
+        (
+          wrapper.get('[data-testid="budget-table"]').element as HTMLElement
+        ).style.getPropertyValue('--row-grid')
+      expect(
+        wrapper
+          .get('[data-testid="comparison-option-none"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      expect(grid()).toBe('1fr auto auto auto')
+      expect(
+        wrapper.get('[data-testid="budget-table-header"]').text()
+      ).not.toContain('Historique')
+
+      // Editing, « Comparer avec » sets the past the envelopes are set against.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
       wrapper
         .findComponent({ name: 'ComparisonSelector' })
         .vm.$emit('update:range', {
@@ -1714,26 +2848,23 @@ describe('BudgetPage', () => {
       await flushPromises()
 
       const row = wrapper.get('[data-testid="budget-row-Alimentation"]')
-      // Historique · figure · months · link.
+      // Historique · envelope field · actual · months · link.
+      expect(grid()).toBe('1fr auto auto auto auto auto')
       expect(
-        (
-          wrapper.get('[data-testid="budget-table"]').element as HTMLElement
-        ).style.getPropertyValue('--row-grid')
-      ).toBe('1fr auto auto auto auto')
+        wrapper.get('[data-testid="budget-table-header"]').text()
+      ).toContain('Historique')
       expect(row.text()).toMatch(/100,00/)
-      // The row's one link is the figure's, the plan so far.
-      expect(
-        JSON.parse(
-          wrapper
-            .get('[data-testid="budget-actual-link-Alimentation"]')
-            .attributes('data-to') ?? '{}'
-        ).query.label
-      ).toBe('Alimentation · plan')
       expect(
         wrapper
           .find('[data-testid="budget-historical-link-Alimentation"]')
           .exists()
       ).toBe(false)
+      // The historical figure can be taken as the envelope.
+      expect(
+        wrapper
+          .find('[data-testid="budget-take-historical-Alimentation"]')
+          .exists()
+      ).toBe(true)
 
       await row.get('button').trigger('click')
       const historical = JSON.parse(
@@ -1746,14 +2877,6 @@ describe('BudgetPage', () => {
         to: '2026-05-31',
         label: 'Alimentation · Mars–Mai 2026',
       })
-
-      // Editing, the historical figure can be taken as the envelope.
-      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
-      expect(
-        wrapper
-          .find('[data-testid="budget-take-historical-Alimentation"]')
-          .exists()
-      ).toBe(true)
     })
 
     it('links each subcategory line to its rows over the statistics window, « none » included', async () => {
@@ -1839,10 +2962,8 @@ describe('BudgetPage', () => {
       })
       const wrapper = mount(BudgetPage)
       await flushPromises()
-      wrapper
-        .findComponent({ name: 'BudgetTableControls' })
-        .vm.$emit('set-mode', 'real')
-      await flushPromises()
+      await readAverage(wrapper)
+      await readAll(wrapper)
       await wrapper
         .get('[data-testid="budget-row-Alimentation"]')
         .get('button')
@@ -2043,8 +3164,15 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      const section = wrapper.get('[data-testid="budget-amortized"]')
+      const section = wrapper.get('[data-testid="budget-amortized-line"]')
       expect(section.text()).toContain('Achats lissés en cours')
+      // Folded on load: the list waits behind « Déplier ».
+      expect(
+        wrapper.find('[data-testid="budget-amortized-tx-phone"]').exists()
+      ).toBe(false)
+      await section
+        .get('[data-testid="budget-amortized-toggle"]')
+        .trigger('click')
       const phone = wrapper.get('[data-testid="budget-amortized-tx-phone"]')
       expect(phone.text()).toMatch(/54,17/)
       expect(phone.text()).toContain('21 mois restants')
@@ -2052,6 +3180,66 @@ describe('BudgetPage', () => {
         linkOf(wrapper.get('[data-testid="budget-amortized-link-tx-phone"]'))
           .query
       ).toMatchObject({ ids: 'tx-phone' })
+      wrapper.unmount()
+    })
+
+    it('folds the projects and the smoothed purchases under the envelopes, in that order', async () => {
+      vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
+        items: [
+          {
+            id: 'tag-trip',
+            name: 'Vacances Italie',
+            color: null,
+            icon: null,
+            eventStartDate: '2026-05-10',
+            eventEndDate: '2026-05-14',
+            budgetAmount: 500,
+            spent: 450,
+          },
+        ],
+        families: [],
+        totalBudget: 500,
+        totalSpent: 450,
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Les enveloppes')
+      expect(
+        wrapper.get('[data-testid="budget-envelopes-subtitle"]').text()
+      ).toBe('Toutes les catégories du plan, les plus lourdes en tête')
+
+      // The list, then Projets, then Achats lissés.
+      const order = wrapper
+        .findAll(
+          '[data-testid="budget-table"], [data-testid="budget-projects-line"], [data-testid="budget-amortized-line"]'
+        )
+        .map(el => el.attributes('data-testid'))
+      expect(order).toEqual([
+        'budget-table',
+        'budget-projects-line',
+        'budget-amortized-line',
+      ])
+      // Both folded on load.
+      expect(
+        wrapper
+          .findAll(
+            '[data-testid="budget-projects-toggle"], [data-testid="budget-amortized-toggle"]'
+          )
+          .map(el => el.attributes('aria-expanded'))
+      ).toEqual(['false', 'false'])
+      // The coloured boxes are gone.
+      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="budget-amortized"]').exists()).toBe(
+        false
+      )
+      // Each row carries its anchor, for « Voir la ligne » and « À faire ».
+      expect(
+        wrapper.get('[data-testid="budget-row-Maison"]').attributes('id')
+      ).toMatch(/^budget-row-cat-/)
       wrapper.unmount()
     })
 
@@ -2076,6 +3264,7 @@ describe('BudgetPage', () => {
     it('reads a smoothed purchase as a slice, not as an event', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
+      await readAverage(wrapper)
 
       // The slices are said in the drill-down, not on the row.
       expect(
@@ -2099,10 +3288,15 @@ describe('BudgetPage', () => {
         linkOf(wrapper.get('[data-testid="budget-amortized-row-link-Maison"]'))
           .query
       ).toMatchObject({ ids: 'tx-fridge' })
-      // The mode is offered, and says the totals are no longer the cash.
+      // The reading is offered, in the menu, and says the totals are no
+      // longer the cash; the table carries no note of its own.
       expect(
-        wrapper.get('[data-testid="budget-everyday-amortized-note"]').text()
-      ).toContain("ne correspond plus à l'argent sorti du compte")
+        wrapper.find('[data-testid="budget-everyday-amortized-note"]').exists()
+      ).toBe(false)
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      expect(
+        wrapper.get('[data-testid="dashboard-amortized-note"]').text()
+      ).toContain('ne correspond plus à l’argent sorti du compte')
       wrapper.unmount()
     })
 
@@ -2110,8 +3304,7 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
-      await flushPromises()
+      await readAll(wrapper)
 
       expect(
         wrapper.find('[data-testid="budget-row-High-tech"]').exists()
@@ -2119,9 +3312,9 @@ describe('BudgetPage', () => {
       expect(
         wrapper.find('[data-testid="matrix-row-High-tech"]').exists()
       ).toBe(false)
-      expect(wrapper.find('[data-testid="budget-amortized"]').exists()).toBe(
-        false
-      )
+      expect(
+        wrapper.find('[data-testid="budget-amortized-line"]').exists()
+      ).toBe(false)
       expect(wrapper.text()).not.toMatch(/dont [^€]*€ lissés/)
       expect(
         wrapper.get('[data-testid="matrix-cell-Maison-2026-05"]').text()
@@ -2131,6 +3324,499 @@ describe('BudgetPage', () => {
           wrapper.get('[data-testid="matrix-cell-Maison-2026-05"]').get('a')
         ).query.also
       ).toBeUndefined()
+      wrapper.unmount()
+    })
+  })
+
+  describe('« À faire »', () => {
+    /**
+     * Plan June→Dec 2026, read on 20 August: Alimentation spends 350 € on
+     * a 300 € envelope in August, Transport 60 € a month with none.
+     */
+    const months = [
+      '2026-06',
+      '2026-07',
+      '2026-08',
+      '2026-09',
+      '2026-10',
+      '2026-11',
+      '2026-12',
+    ]
+    const planJunDec: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-jun-dec',
+      name: 'Juin–Déc 2026',
+      startDate: '2026-06-01',
+      endDate: '2026-12-31',
+      monthCount: 7,
+      totalAmount: 300,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          amount: 300,
+        },
+      ],
+    }
+
+    function statisticsWith(
+      food: number[],
+      transport: number[] | null
+    ): BudgetStatisticsDto {
+      return {
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 0,
+            transactionCount: 12,
+            averagePerMonth: 0,
+            monthlyAmounts: food,
+          },
+          ...(transport
+            ? [
+                {
+                  categoryId: 'cat-transport',
+                  categoryName: 'Transport',
+                  categoryIcon: '🚗',
+                  totalAmount: 0,
+                  transactionCount: 4,
+                  averagePerMonth: 0,
+                  monthlyAmounts: transport,
+                },
+              ]
+            : []),
+        ],
+        incomeByCategory: [
+          {
+            categoryId: 'cat-salary',
+            categoryName: 'Salaire',
+            totalAmount: 3000,
+            transactionCount: 3,
+            averagePerMonth: 1000,
+            monthlyAmounts: [1000, 1000, 1000, 0, 0, 0, 0],
+          },
+        ],
+      }
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-08-20T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planJunDec)
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([])
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(
+        statisticsWith([250, 280, 350, 0, 0, 0, 0], [80, 40, 10, 0, 0, 0, 0])
+      )
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const keysOf = (w: ReturnType<typeof mount>) =>
+      w
+        .findAll('[data-testid^="todo-item-"]')
+        .map(a => a.attributes('data-testid'))
+
+    it('sits at the foot of the page, after the envelopes, in the plan’s order', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const card = wrapper.get('[data-testid="todo-card"]')
+      const band = wrapper.get('[data-testid="budget-month-band"]')
+      const table = wrapper.get('[data-testid="budget-table"]')
+      const folded = wrapper.get('[data-testid="budget-folded-lines"]')
+      const follows = (a: Element, b: Element) =>
+        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      expect(follows(band.element, table.element)).toBe(true)
+      expect(follows(table.element, card.element)).toBe(true)
+      // After the folded lines too: the projects, the smoothed purchases,
+      // the month-by-month grid.
+      expect(follows(folded.element, card.element)).toBe(true)
+      expect(folded.element.contains(card.element)).toBe(false)
+
+      expect(keysOf(wrapper)).toEqual([
+        'todo-item-envelope-cat-food',
+        'todo-item-no-envelope-cat-transport',
+      ])
+      const envelope = wrapper.get(
+        '[data-testid="todo-item-envelope-cat-food"]'
+      )
+      expect(envelope.text()).toMatch(/Alimentation : enveloppe dépassée de 50/)
+      expect(JSON.parse(envelope.attributes('data-to') ?? '{}')).toEqual({
+        hash: '#budget-row-cat-food',
+      })
+      const transport = wrapper.get(
+        '[data-testid="todo-item-no-envelope-cat-transport"]'
+      )
+      // June and July, the complete months: (80 + 40) / 2.
+      expect(transport.text()).toMatch(
+        /Transport sans enveloppe · 60\s€ par mois/
+      )
+      expect(JSON.parse(transport.attributes('data-to') ?? '{}')).toEqual({
+        path: '/budget',
+        query: { edit: '1' },
+      })
+      wrapper.unmount()
+    })
+
+    it('renders nothing when nothing is to do', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(
+        statisticsWith([250, 280, 120, 0, 0, 0, 0], null)
+      )
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(wrapper.find('[data-testid="todo-card"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('is not shown while the envelopes are being edited', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+
+      expect(wrapper.find('[data-testid="todo-card"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('asks for the next plan when the one shown is over and none runs', async () => {
+      vi.setSystemTime(new Date('2027-02-10T12:00:00Z'))
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: planJunDec.id,
+          name: planJunDec.name,
+          startDate: planJunDec.startDate,
+          endDate: planJunDec.endDate,
+          monthCount: 7,
+          totalAmount: 300,
+          entryCount: 1,
+          createdAt: planJunDec.createdAt,
+        },
+      ])
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const line = wrapper.get('[data-testid="todo-item-no-current-plan"]')
+      expect(line.text()).toContain('Aucun plan en cours : créer le suivant')
+      expect(JSON.parse(line.attributes('data-to') ?? '{}')).toEqual({
+        path: '/budget',
+        query: { new: '1' },
+      })
+      wrapper.unmount()
+    })
+
+    /** The plan shown, then « Hiver 2027 », the next one already made. */
+    const withNextPlan = () =>
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: planJunDec.id,
+          name: planJunDec.name,
+          startDate: planJunDec.startDate,
+          endDate: planJunDec.endDate,
+          monthCount: 7,
+          totalAmount: 300,
+          entryCount: 1,
+          createdAt: planJunDec.createdAt,
+        },
+        {
+          id: 'plan-winter',
+          name: 'Hiver 2027',
+          startDate: '2027-03-01',
+          endDate: '2027-05-31',
+          monthCount: 3,
+          totalAmount: 300,
+          entryCount: 1,
+          createdAt: planJunDec.createdAt,
+        },
+      ])
+
+    it('does not ask to prepare the next plan once it exists', async () => {
+      vi.setSystemTime(new Date('2026-12-10T12:00:00Z'))
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(
+        statisticsWith([250, 280, 250, 250, 250, 250, 120], null)
+      )
+      withNextPlan()
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="todo-item-plan-ending"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('does not ask for a plan when the one shown is over and the next is made', async () => {
+      vi.setSystemTime(new Date('2027-02-10T12:00:00Z'))
+      withNextPlan()
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="todo-item-no-current-plan"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('enters edit mode on ?edit=1, then takes it off the URL', async () => {
+      currentRoute.query = { edit: '1', from: 'todo' }
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(true)
+      expect(routerReplace).toHaveBeenCalledWith({
+        query: { from: 'todo' },
+        hash: '',
+      })
+      wrapper.unmount()
+    })
+
+    it('opens « Nouveau budget » on ?new=1, then takes it off the URL', async () => {
+      currentRoute.query = { new: '1' }
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.findComponent({ name: 'NewBudgetPlanModal' }).props('open')
+      ).toBe(true)
+      expect(routerReplace).toHaveBeenCalledWith({ query: {}, hash: '' })
+      wrapper.unmount()
+    })
+
+    it('leaves the URL alone when it carries no action', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(routerReplace).not.toHaveBeenCalled()
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('follows a line on the page: edit mode, or the row brought into view', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      const row = document.getElementById('budget-row-cat-food')
+      expect(row).not.toBeNull()
+      const scroll = vi.fn()
+      if (row) row.scrollIntoView = scroll
+      liveRoute.hash = '#budget-row-cat-food'
+      await flushPromises()
+      expect(scroll).toHaveBeenCalledTimes(1)
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: {}, hash: '' })
+
+      liveRoute.hash = ''
+      liveRoute.query = { edit: '1' }
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
+  describe('a finished plan (« Bilan du plan »)', () => {
+    /**
+     * « Printemps 2026 », January → March, read on 20 October: the plan is
+     * over, no other runs. Alimentation spends past its envelope on
+     * average, Transport holds.
+     */
+    const planSpring: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-spring',
+      name: 'Printemps 2026',
+      startDate: '2026-01-01',
+      endDate: '2026-03-31',
+      monthCount: 3,
+      totalAmount: 350,
+      projectReserve: 100,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          amount: 300,
+        },
+        {
+          id: 'e2',
+          categoryId: 'cat-transport',
+          categoryName: 'Transport',
+          categoryIcon: '🚗',
+          amount: 50,
+        },
+      ],
+    }
+
+    const springStatistics: BudgetStatisticsDto = {
+      ...sampleStatistics,
+      periodMonths: 3,
+      monthLabels: ['2026-01', '2026-02', '2026-03'],
+      expensesByCategory: [
+        {
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          totalAmount: 1100,
+          transactionCount: 12,
+          averagePerMonth: 366.67,
+          monthlyAmounts: [350, 400, 350],
+        },
+        {
+          categoryId: 'cat-transport',
+          categoryName: 'Transport',
+          categoryIcon: '🚗',
+          totalAmount: 120,
+          transactionCount: 3,
+          averagePerMonth: 40,
+          monthlyAmounts: [40, 40, 40],
+        },
+      ],
+      incomeByCategory: [
+        {
+          categoryId: 'cat-salary',
+          categoryName: 'Salaire',
+          totalAmount: 3000,
+          transactionCount: 3,
+          averagePerMonth: 1000,
+          monthlyAmounts: [1000, 1000, 1000],
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-10-20T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planSpring)
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([])
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(springStatistics)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const flat = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
+    it('reads the review in place of « Ce mois-ci », the whole plan by default', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        false
+      )
+      const band = wrapper.get('[data-testid="budget-review-band"]')
+      expect(band.get('[data-testid="budget-review-title"]').text()).toBe(
+        'Bilan du plan · Printemps 2026'
+      )
+      expect(
+        band
+          .get('[data-testid="budget-month-average"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      // (390 + 440 + 390) / 3 ≈ 407 a month on 350 €.
+      expect(
+        flat(band.get('[data-testid="budget-month-value-spent"]').text())
+      ).toBe('407 € par mois')
+      // 1 000 − 407 ≈ 593 a month.
+      expect(
+        flat(band.get('[data-testid="budget-month-value-savings"]').text())
+      ).toBe('593 € par mois')
+      expect(
+        flat(band.get('[data-testid="budget-month-value-envelopes"]').text())
+      ).toBe('1 sur 2')
+      expect(band.get('[data-testid="budget-badge-envelopes"]').text()).toBe(
+        'Alimentation'
+      )
+      expect(
+        flat(band.get('[data-testid="budget-month-value-projects"]').text())
+      ).toBe('0 € sur 100 €')
+      wrapper.unmount()
+    })
+
+    it('reads one of its months once chosen in « Mois lu »', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="budget-month-2026-02"]').trigger('click')
+      await flushPromises()
+
+      const band = wrapper.get('[data-testid="budget-review-band"]')
+      expect(
+        flat(band.get('[data-testid="budget-month-value-spent"]').text())
+      ).toBe('440 €')
+      expect(
+        band
+          .get('[data-testid="budget-month-2026-02"]')
+          .attributes('aria-checked')
+      ).toBe('true')
+      // « À faire » still says the plan's average, not the month read.
+      expect(
+        wrapper
+          .find('[data-testid="todo-item-envelopes-over-average"]')
+          .exists()
+      ).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('asks for the next plan, then names the envelopes over on average', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      expect(
+        wrapper
+          .findAll('[data-testid^="todo-item-"]')
+          .map(a => a.attributes('data-testid'))
+      ).toEqual([
+        'todo-item-no-current-plan',
+        'todo-item-envelopes-over-average',
+      ])
+      const line = wrapper.get(
+        '[data-testid="todo-item-envelopes-over-average"]'
+      )
+      expect(line.text()).toContain(
+        'Une enveloppe dépassée en moyenne : Alimentation'
+      )
+      expect(JSON.parse(line.attributes('data-to') ?? '{}')).toEqual({
+        hash: '#budget-envelopes-title',
+      })
+
+      // The anchor is the list's title: followed, it comes into view.
+      const title = document.getElementById('budget-envelopes-title')
+      expect(title).not.toBeNull()
+      const scroll = vi.fn()
+      if (title) title.scrollIntoView = scroll
+      liveRoute.hash = '#budget-envelopes-title'
+      await flushPromises()
+      expect(scroll).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('keeps « Ce mois-ci » while the plan runs', async () => {
+      vi.setSystemTime(new Date('2026-02-15T12:00:00Z'))
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(wrapper.find('[data-testid="budget-review-band"]').exists()).toBe(
+        false
+      )
       wrapper.unmount()
     })
   })

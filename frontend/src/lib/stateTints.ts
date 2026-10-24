@@ -10,6 +10,8 @@
  * share bars' blue-400.
  */
 
+import { DASHBOARD_THRESHOLDS } from './dashboardThresholds'
+
 /** The three states a badge can say, and nothing else. */
 export type StateTone = 'under' | 'over' | 'neutral'
 
@@ -29,3 +31,52 @@ export const STATE_COLORS: Readonly<Record<StateTone, string>> = {
 
 /** The one data hue of the dashboard: the share bars' blue-400. */
 export const DATA_HUE = '#60a5fa'
+
+/**
+ * The income line of the Budget's « Dépenses et enveloppe par mois »:
+ * green-600, legible on a light and a dark ground. Richard's decision of
+ * 2026-10-24, an exception to the rule « no green on a figure »: a line of
+ * reference, not a figure, told apart from the envelope (amber, dashed)
+ * and the columns (`DATA_HUE`).
+ */
+export const INCOME_LINE_COLOR = '#16a34a'
+
+/**
+ * A gap to a reference, as a share of it: `under` below it, `over` above
+ * it, `neutral` within ±5 % (`DASHBOARD_THRESHOLDS.neutralGap`) or when
+ * there is no reference to compare with. Shared by « Ce mois-ci » on the
+ * dashboard (spending against the habit) and on the budget (spending
+ * against the envelope to date).
+ */
+export function gapOf(
+  value: number,
+  reference: number
+): { tone: StateTone; ratio: number } {
+  if (reference <= 0) return { tone: 'neutral', ratio: 0 }
+  const ratio = (value - reference) / reference
+  if (Math.abs(ratio) <= DASHBOARD_THRESHOLDS.neutralGap) {
+    return { tone: 'neutral', ratio }
+  }
+  return { tone: ratio < 0 ? 'under' : 'over', ratio }
+}
+
+/**
+ * The tone of a change of a total, said by the edit mode's band and bar
+ * alike (budget-refonte.md, lot 4): teal for a drop, amber for a rise,
+ * grey when it rounds to nothing.
+ */
+export function deltaTone(delta: number): StateTone {
+  if (Math.round(delta) === 0) return 'neutral'
+  return delta < 0 ? 'under' : 'over'
+}
+
+/**
+ * Flips teal and amber, for a figure where more is better — a saving, a
+ * margin: above its reference it is the good side (teal), below it the
+ * shortfall (amber). Neutral stays neutral.
+ */
+export function invertTone(tone: StateTone): StateTone {
+  if (tone === 'under') return 'over'
+  if (tone === 'over') return 'under'
+  return 'neutral'
+}

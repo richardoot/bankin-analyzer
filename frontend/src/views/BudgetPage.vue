@@ -1,6 +1,13 @@
 <script setup lang="ts">
   import PageShell from '@/components/ui/PageShell.vue'
-  import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+  import {
+    ref,
+    computed,
+    nextTick,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+  } from 'vue'
   import { api } from '@/lib/api'
   import type {
     AmortizedPurchaseDto,
@@ -11,13 +18,16 @@
     TagDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
-  import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
+  import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
+  import BudgetReviewBand from '@/components/budget/BudgetReviewBand.vue'
+  import BudgetPlanningBand from '@/components/budget/BudgetPlanningBand.vue'
+  import { budgetMonthReading, budgetReviewReading } from '@/lib/budgetMonth'
   import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
   import BudgetPlanHeader from '@/components/budget/BudgetPlanHeader.vue'
-  import BudgetProjectsSection from '@/components/budget/BudgetProjectsSection.vue'
-  import BudgetAmortizedSection from '@/components/budget/BudgetAmortizedSection.vue'
+  import BudgetProjectsLine from '@/components/budget/BudgetProjectsLine.vue'
+  import BudgetAmortizedLine from '@/components/budget/BudgetAmortizedLine.vue'
   import {
     isAmortizationCarrier,
     purchasesWithSlicesIn,
@@ -29,6 +39,8 @@
   import { type SortOrder } from '@/components/budget/sortOptions'
   import { planStatus } from '@/components/budget/planStatus'
   import BudgetMonthlyMatrix from '@/components/budget/BudgetMonthlyMatrix.vue'
+  import { budgetChartMonths } from '@/lib/budgetChartMonths'
+  import { useIsMobile } from '@/composables/useMediaQuery'
   import type {
     MatrixMonth,
     MatrixRow,
@@ -40,34 +52,34 @@
     type ComparisonPreset,
     type ComparisonRange,
   } from '@/composables/useBudgetComparison'
-  import { useRouter, onBeforeRouteLeave } from 'vue-router'
+  import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
   import { formatMonth } from '@/lib/formatters'
   import { monthWindow, transactionsLink } from '@/lib/transactionsLink'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
-  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import { useSuppressTabBar } from '@/composables/useMobileNavigation'
+  import { useBudgetDraft } from '@/composables/useBudgetDraft'
+  import TodoCard from '@/components/dashboard/TodoCard.vue'
+  import {
+    budgetTodoItems as composeBudgetTodoItems,
+    categoriesWithoutEnvelope,
+  } from '@/lib/budgetTodo'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
+  const route = useRoute()
 
-  // Real vs everyday tracking, persisted so the choice survives a reload.
-  // Defaults to everyday: a holiday inside the plan must not read as an
-  // overrun of the recurring budget.
-  const BREAKDOWN_MODE_KEY = 'budget-breakdown-mode'
-  const breakdownMode = ref<BreakdownMode>(
-    localStorage.getItem(BREAKDOWN_MODE_KEY) === 'real' ? 'real' : 'everyday'
-  )
-
-  function setBreakdownMode(mode: BreakdownMode): void {
-    breakdownMode.value = mode
-    try {
-      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
-    } catch {
-      // Private browsing: the choice simply does not persist.
-    }
-  }
+  // The reading — Vie courante or Tout, received reimbursements taken off
+  // or not — is the one the dashboard and the trends read: kept by the
+  // filters store, remembered in this browser, set from the « Lecture »
+  // menu. Defaults to everyday: a holiday inside the plan must not read as
+  // an overrun of the recurring budget.
+  const breakdownMode = computed<BreakdownMode>({
+    get: () => filtersStore.breakdownMode,
+    set: mode => filtersStore.setBreakdownMode(mode),
+  })
 
   // ── State ────────────────────────────────────────────────────────────────
   const plan = ref<BudgetPlanDto | null>(null)
@@ -92,7 +104,10 @@
   const comparisonRange = ref<ComparisonRange | null>(null)
   const yearAgoAvailable = ref(false)
 
-  const deductReimbursements = ref(true)
+  const deductReimbursements = computed<boolean>({
+    get: () => filtersStore.deductReimbursements,
+    set: value => filtersStore.setDeductReimbursements(value),
+  })
   // A debt still owed: one preference shared with the dashboard, kept by the
   // backend. The switch reads and writes the store.
   const deductPendingReimbursements = computed<boolean>({
@@ -105,41 +120,75 @@
   const sortOrder = ref<SortOrder>('amount-desc')
 
   /**
-   * The envelopes being edited. Until "Enregistrer" is pressed this is a
-   * draft: `savedBudgets` holds what the server actually has, which is what
-   * "Annuler" restores and what the modified-count is measured against.
+   * The envelopes and the reference income being edited: a draft until
+   * « Enregistrer », restored by « Annuler » (useBudgetDraft).
    */
-  const budgetInputs = ref<Map<string, number>>(new Map())
-  const savedBudgets = ref<Map<string, number>>(new Map())
+  const draft = useBudgetDraft(plan)
+  const {
+    referenceIncomeInput,
+    savedReferenceIncome,
+    getBudgetForCategory,
+    getSavedBudget,
+    isCategoryDirty,
+    dirtyCategoryIds,
+    referenceIncomeDirty,
+    hasUnsavedChanges,
+    savedPlanTotal,
+    draftPlanTotal,
+    draftDelta,
+    updateBudgetInput,
+    resetAllBudgets,
+  } = draft
   const isEditing = ref(false)
   // The edit bar takes the tab bar's place below lg while it shows.
   useSuppressTabBar(() => isEditing.value || saveStatus.value === 'saved')
 
   /**
-   * The plan month the page is reading, or null for the average over every
-   * complete month. Not persisted: which month you want to look at is a
-   * question of the moment, unlike the breakdown mode.
+   * The month the user picked in « Mois lu »: a plan month, null for
+   * « Moyenne du plan », undefined while nothing was picked — the page then
+   * reads its default. Not persisted: which month you want to look at is a
+   * question of the moment, unlike the reading. A plan switch drops it.
    */
-  const selectedMonth = ref<string | null>(null)
+  const monthChoice = ref<string | null | undefined>(undefined)
+
+  /**
+   * The plan month the page is reading, or null for the average over every
+   * complete month. By default the running month while the plan runs —
+   * « Ce mois-ci » is what the page is opened for — and the average
+   * otherwise (a finished plan, one not begun yet).
+   */
+  const selectedMonth = computed<string | null>(() => {
+    if (monthChoice.value !== undefined) return monthChoice.value
+    const current = plan.value
+    if (!current) return null
+    const running = currentYearMonth()
+    return running >= current.startDate.slice(0, 7) &&
+      running <= current.endDate.slice(0, 7)
+      ? running
+      : null
+  })
 
   const expandedCategories = ref<Set<string>>(new Set())
 
-  /** Exceptional tags owned by the user, for the events band. */
-  const exceptionalTags = ref<TagDto[]>([])
-
   /** Projects overlapping the plan, with spend vs envelope. */
   const projects = ref<TagBudgetSummaryDto | null>(null)
+
+  /** Exceptional tags owned by the user, for the events of the period. */
+  const exceptionalTags = ref<TagDto[]>([])
 
   const isModalOpen = ref(false)
   const isHistoryOpen = ref(false)
   /** Total number of plans known to exist — drives the "Voir l'historique" hint on the empty state */
   const planCount = ref(0)
+  /**
+   * The windows of every plan known to exist: whether one runs today,
+   * when the plan shown is over (« À faire » then asks for the next one).
+   */
+  const planWindows = ref<{ id: string; startDate: string; endDate: string }[]>(
+    []
+  )
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function getBudgetForCategory(categoryId: string): number {
-    return budgetInputs.value.get(categoryId) ?? 0
-  }
-
   // Per-category numbers used across the new layout. Each function may
   // return 0 when no data is available — the caller decides whether to
   // hide the column based on context.
@@ -167,7 +216,8 @@
 
   /**
    * Status badge inline on the row, derived from the most actionable signal.
-   * Priority: actual overshoot ⚠ > budget covers history ✓ > nothing.
+   * Priority: « Dépassé » (the actual past the envelope) > « Couvert » (the
+   * envelope covers the history, edit mode only) > nothing.
    */
   function getRowStatus(
     category: CategoryAverageDto
@@ -227,8 +277,15 @@
     selectedMonth,
   })
 
-  /** Show the "Historique" column when a comparison range is selected. */
-  const showHistoricalColumn = computed(() => comparisonRange.value !== null)
+  /**
+   * Show the "Historique" column while editing with a comparison chosen.
+   * The comparison itself outlives edit mode (Richard, 2026-10-24): the
+   * chart draws its months in tracking too, but the history column,
+   * « Couvert », the margins and the sort by history stay planning tools.
+   */
+  const showHistoricalColumn = computed(
+    () => isEditing.value && comparisonRange.value !== null
+  )
   /**
    * Show the "Réel" column as soon as there is a month to read. Isolating the
    * running month counts: it carries real spending even though it would never
@@ -379,34 +436,32 @@
     }
   })
 
-  /** Plan-zone aggregates (income + expense averages). */
-  const planAggregates = computed(() =>
-    comparison.aggregatesFor(visibleExpenseCategories.value)
-  )
-  const planIncomeAggregates = computed(() =>
-    comparison.incomeAggregates(visibleIncomeCategories.value)
-  )
-
-  const planIncomeAvg = computed(() => planIncomeAggregates.value.planIncomeAvg)
-
-  /** Actual averages restricted to plan months that are complete. */
-  const planActualExpenseAvg = computed(
-    () => planAggregates.value.planActualExpenseAvg
-  )
-  const planActualIncomeAvg = computed(
-    () => planIncomeAggregates.value.planActualIncomeAvg
+  /**
+   * The income of each complete plan month: the base of the planned
+   * savings in « Planification », as in « Ce mois-ci ».
+   */
+  const completeMonthsIncome = computed(() =>
+    comparison.completePlanIndices.value.map(i =>
+      visibleIncomeCategories.value.reduce(
+        (total, cat) => total + (cat.monthlyAmounts?.[i] ?? 0),
+        0
+      )
+    )
   )
 
-  /** Comparison-zone aggregates — null when no comparison selected. */
-  const comparisonExpenseAvg = computed(
-    () => planAggregates.value.comparisonExpenseAvg
-  )
-  const comparisonIncomeAvg = computed(
-    () => planIncomeAggregates.value.comparisonIncomeAvg
-  )
-  const planToDateIncomeAvg = computed(
-    () => planIncomeAggregates.value.planToDateIncomeAvg
-  )
+  /**
+   * Income averaged over the complete plan months, whichever month is read:
+   * a running month has received part of its income only.
+   */
+  const completeMonthsIncomeAvg = computed(() => {
+    const indices = comparison.completePlanIndices.value
+    if (indices.length === 0) return 0
+    let total = 0
+    for (const cat of visibleIncomeCategories.value) {
+      for (const i of indices) total += cat.monthlyAmounts?.[i] ?? 0
+    }
+    return total / indices.length
+  })
 
   /**
    * Monthly income reference for the chart's "Revenus" line, its tooltip
@@ -420,30 +475,11 @@
    *   4. the raw plan average as a last resort.
    */
   const chartAverageIncome = computed(() => {
-    if (planActualIncomeAvg.value > 0) return planActualIncomeAvg.value
-    if (comparisonIncomeAvg.value > 0) return comparisonIncomeAvg.value
-    if (planToDateIncomeAvg.value > 0) return planToDateIncomeAvg.value
-    return planIncomeAvg.value
-  })
-
-  /**
-   * The plan's total, the same figure everywhere on the page: over every
-   * entry of the plan, not only the categories the statistics happen to
-   * list (an envelope on a category that spent nothing this window would
-   * otherwise vanish from the summary while the edit bar still counts it).
-   */
-  const totalBudget = computed(() => draftPlanTotal.value)
-
-  /**
-   * Comparison props for the savings summary — null when no comparison is set.
-   */
-  const summaryComparisonProps = computed(() => {
-    if (!comparisonRange.value) return null
-    return {
-      label: comparisonRange.value.label,
-      incomeAvg: comparisonIncomeAvg.value,
-      expenseAvg: comparisonExpenseAvg.value,
-    }
+    if (completeMonthsIncomeAvg.value > 0) return completeMonthsIncomeAvg.value
+    const income = comparison.incomeAggregates(visibleIncomeCategories.value)
+    if (income.comparisonIncomeAvg > 0) return income.comparisonIncomeAvg
+    if (income.planToDateIncomeAvg > 0) return income.planToDateIncomeAvg
+    return income.planIncomeAvg
   })
 
   const monthlyTotalExpenses = computed(() => {
@@ -464,26 +500,50 @@
   })
 
   /**
+   * The events' part of each month, summed over the categories, aligned
+   * with the statistics' months: hatched on the chart's plan columns in
+   * the real reading only, as the dashboard's chart does. « Vie courante »
+   * leaves the events out of the columns, so there is nothing to hatch.
+   */
+  const monthlyExceptionalTotals = computed<number[] | undefined>(() => {
+    if (breakdownMode.value !== 'real') return undefined
+    const totals: number[] = new Array(
+      statistics.value?.monthLabels?.length ?? 0
+    ).fill(0)
+    for (const cat of visibleExpenseCategories.value) {
+      const events = comparison.exceptionalSeriesFor(cat)
+      if (!events) continue
+      for (let i = 0; i < totals.length; i++) {
+        totals[i] = (totals[i] ?? 0) + (events[i] ?? 0)
+      }
+    }
+    return totals.map(v => Math.round(v * 100) / 100)
+  })
+
+  /**
    * True when at least one visible category carries exceptional spending in
-   * the elapsed plan months — drives whether the mode selector is offered.
+   * a started plan month — drives whether the mode selector is offered. Not
+   * the month read: the running month without an event must not hide a
+   * choice the shared preference may hold on « Tout ».
    */
   const hasExceptionalInPlan = computed(() =>
-    visibleExpenseCategories.value.some(c => getExceptionalAverage(c) > 0.005)
+    visibleExpenseCategories.value.some(c => comparison.hasPlanExceptional(c))
   )
 
   /**
-   * Exceptional events whose declared period overlaps the analysed window.
-   * Tags without a period (a party at home) cannot be placed in time and are
-   * therefore not listed — their spending still shows in the row annotations.
+   * Exceptional events whose declared period overlaps the plan, listed in
+   * « Projets de la période ». Tags without a period (a party at home)
+   * cannot be placed in time and are therefore not listed — their spending
+   * still shows in the rows' facts.
    */
   const planEvents = computed(() => {
-    const range = referenceDateRange.value
-    if (!range) return []
+    const current = plan.value
+    if (!current) return []
+    const start = current.startDate.slice(0, 10)
+    const end = current.endDate.slice(0, 10)
     return exceptionalTags.value.filter(t => {
       if (!t.eventStartDate || !t.eventEndDate) return false
-      return (
-        t.eventStartDate <= range.endDate && t.eventEndDate >= range.startDate
-      )
+      return t.eventStartDate <= end && t.eventEndDate >= start
     })
   })
 
@@ -598,12 +658,178 @@
   }
 
   function selectMonth(ym: string | null): void {
-    selectedMonth.value = ym
+    monthChoice.value = ym
   }
 
-  // Isolating a month happens in one place, the period band above the table
-  // (BudgetTableControls): the chart and the month-by-month grid only reflect
-  // the choice. Three places to set the same thing were two too many.
+  // Isolating a month happens in one place, « Mois lu » in the band of the
+  // month (BudgetMonthBand): the rows, the chart and the month-by-month grid
+  // only reflect the choice.
+
+  /**
+   * What every reading of the plan is computed from: the started plan
+   * months and each category's spending in them, in the active reading.
+   */
+  const readingInput = computed(() => {
+    const current = plan.value
+    if (!current) return null
+    const indices = comparison.startedPlanIndices.value
+    return {
+      plan: current,
+      months: comparison.startedPlanMonths.value,
+      completeMonthsCount: comparison.completePlanMonthsCount.value,
+      categories: visibleExpenseCategories.value.map(cat => {
+        const series = comparison.seriesFor(cat)
+        return {
+          categoryId: cat.categoryId,
+          categoryName: cat.categoryName,
+          amounts: indices.map(i => series?.[i] ?? 0),
+        }
+      }),
+      income: indices.map(i =>
+        visibleIncomeCategories.value.reduce(
+          (total, cat) => total + (cat.monthlyAmounts?.[i] ?? 0),
+          0
+        )
+      ),
+    }
+  })
+
+  /**
+   * What the band of the month reads: none while a started plan has no
+   * figures (a failed statistics load) — without them it would say « Le plan
+   * commence le … » of a plan already running. The error alert speaks alone.
+   */
+  const bandInput = computed(() => {
+    const input = readingInput.value
+    if (!input) return null
+    if (!statistics.value && planStatus(input.plan) !== 'future') return null
+    return input
+  })
+
+  /** « Ce mois-ci »: the month read. */
+  const monthReading = computed(() => {
+    const input = bandInput.value
+    if (!input) return null
+    return budgetMonthReading({
+      ...input,
+      selectedMonth: rowSelectedMonth.value,
+      progress: comparison.selectedMonthProgress.value,
+    })
+  })
+
+  /** The plan is over: the page reads its review (lot 6). */
+  const isPlanFinished = computed(() => planStatus(plan.value) === 'past')
+
+  /**
+   * « Bilan du plan »: a finished plan, read whole (« Le plan », its
+   * default) or one of its months.
+   */
+  const reviewReading = computed(() => {
+    const input = bandInput.value
+    if (!input || !isPlanFinished.value) return null
+    return budgetReviewReading({
+      ...input,
+      selectedMonth: rowSelectedMonth.value,
+      progress: null,
+    })
+  })
+
+  /** « Voir la ligne »: the first envelope spent past, brought into view. */
+  function showEnvelope(categoryId: string): void {
+    document
+      .getElementById(`budget-row-${categoryId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // ── « À faire » ──────────────────────────────────────────────────────────
+  // The plan's few things to do (lib/budgetTodo.ts), on the dashboard's
+  // card. Its lines link by route only: an anchor to a row or the projects
+  // line, or this page with `?edit=1` / `?new=1`, which the page reads off
+  // the URL once the plan is loaded, then drops (a reload must not reopen).
+
+  /** Whether some plan covers today, the one shown or another. */
+  const hasCurrentPlan = computed(() => {
+    const month = currentYearMonth()
+    const windows = plan.value
+      ? [plan.value, ...planWindows.value]
+      : planWindows.value
+    return windows.some(
+      w => w.startDate.slice(0, 7) <= month && month <= w.endDate.slice(0, 7)
+    )
+  })
+
+  /**
+   * Whether a plan starts after the one shown ends: the next one is made,
+   * « À faire » no longer asks for it.
+   */
+  const hasNextPlan = computed(() => {
+    const current = plan.value
+    if (!current) return false
+    const end = current.endDate.slice(0, 10)
+    return planWindows.value.some(
+      w => w.id !== current.id && w.startDate.slice(0, 10) > end
+    )
+  })
+
+  const budgetTodoItems = computed(() => {
+    const current = plan.value
+    const status = planStatus(current)
+    const input = readingInput.value
+    if (!current || !status || !input) return []
+    return composeBudgetTodoItems({
+      plan: current,
+      status,
+      // A finished plan says the envelopes it spent past on average,
+      // whichever month the band reads.
+      reading:
+        status === 'past'
+          ? budgetMonthReading({
+              ...input,
+              selectedMonth: null,
+              progress: null,
+            })
+          : monthReading.value,
+      projects: projects.value,
+      categoriesWithoutEnvelope: categoriesWithoutEnvelope({
+        plan: current,
+        completeMonthsCount: input.completeMonthsCount,
+        categories: input.categories,
+      }),
+      hasCurrentPlan: hasCurrentPlan.value,
+      hasNextPlan: hasNextPlan.value,
+      currentMonth: currentYearMonth(),
+    })
+  })
+
+  /**
+   * The actions « À faire » links to: edit mode, a new plan, an anchor.
+   * The router does not scroll within the page (`scrollBehavior`), so the
+   * page brings the anchor into view itself. Each is read once, then taken
+   * off the URL — the same line can be followed again, and a reload does
+   * not reopen edit mode.
+   */
+  function consumeRouteActions(): void {
+    if (isLoading.value) return
+    const { edit, new: create, ...query } = route.query
+    const hash = route.hash
+    if (edit === undefined && create === undefined && !hash) return
+    if (edit === '1' && plan.value && !isEditing.value) enterEditMode()
+    if (create === '1' && !isEditing.value) openCreateModal()
+    if (hash) {
+      const id = decodeURIComponent(hash.slice(1))
+      void nextTick(() => {
+        document
+          .getElementById(id)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+    void router.replace({ query, hash: '' })
+  }
+
+  watch(
+    [() => route.query.edit, () => route.query.new, () => route.hash],
+    consumeRouteActions
+  )
 
   /** Label describing what the "Réel" figures currently cover. */
   const actualPeriodLabel = computed(() => {
@@ -684,11 +910,78 @@
   /** One column is just the row list again — the grid earns its space at two. */
   const showMonthlyMatrix = computed(() => matrixMonths.value.length >= 2)
 
+  /**
+   * The ranges « Dépenses et enveloppe par mois » draws: the plan's, and
+   * the comparison's whenever one is chosen, in tracking as in editing
+   * (Richard, 2026-10-24, back to the chart before lot 5).
+   */
+  const chartRanges = computed(() => ({
+    planStartMonth: plan.value?.startDate.slice(0, 7),
+    planEndMonth: plan.value?.endDate.slice(0, 7),
+    comparisonStartMonth: comparisonRange.value?.startMonth,
+    comparisonEndMonth: comparisonRange.value?.endMonth,
+  }))
+
+  /** The columns the chart would draw, in the statistics' order. */
+  const chartMonths = computed(() =>
+    budgetChartMonths(statistics.value?.monthLabels ?? [], {
+      ...chartRanges.value,
+      currentMonth: currentYearMonth(),
+    })
+  )
+
+  /**
+   * The chart's card shows as soon as a month of the plan has begun: it
+   * carries « Comparer avec », which a one-month plan needs to draw a
+   * second column. The chart itself waits for two.
+   */
+  const showChartCard = computed(() => chartMonths.value.length >= 1)
+  const showMonthlyChart = computed(() => chartMonths.value.length >= 2)
+
+  /**
+   * « Dépenses et enveloppe par mois » is a native `details`, open on a
+   * desk and folded below md, as the dashboard's chart is. `open` is an
+   * attribute: the page follows the element's own toggle so a tap is
+   * never undone by a render.
+   */
+  const isBelowMd = useIsMobile()
+  const chartOpen = ref(!isBelowMd.value)
+  function onChartToggle(event: Event): void {
+    chartOpen.value = (event.target as HTMLDetailsElement).open
+  }
+
+  /**
+   * The events' part of each month, stacked hatched on a row's drill-down
+   * chart — in the real reading only, and only when a month carries any,
+   * as on the dashboard's rows. « Vie courante » leaves them out of the
+   * figures, so out of the chart.
+   */
+  function categoryChartOverlay(
+    cat: CategoryAverageDto
+  ): { values: number[]; label: string } | undefined {
+    if (breakdownMode.value !== 'real' || !cat.monthlyAmounts) return undefined
+    const events = comparison.exceptionalSeriesFor(cat)
+    if (!events || !events.some(value => value !== 0)) return undefined
+    return { values: events, label: 'événements' }
+  }
+
+  /**
+   * A row's drill-down chart: the month in the active reading — under the
+   * overlay, the real month less its events, so the stack adds up to the
+   * real month.
+   */
   function categoryChartData(cat: CategoryAverageDto) {
     const labels = (statistics.value?.monthLabels ?? []).map(ym =>
       formatMonth(ym, { year: false })
     )
-    return { labels, values: comparison.seriesFor(cat) ?? [] }
+    const overlay = categoryChartOverlay(cat)
+    const values = overlay
+      ? (cat.monthlyAmounts ?? []).map(
+          (amount, i) =>
+            Math.round((amount - (overlay.values[i] ?? 0)) * 100) / 100
+        )
+      : (comparison.seriesFor(cat) ?? [])
+    return { labels, values }
   }
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -713,8 +1006,8 @@
   }
 
   /**
-   * Exceptional tags, used to name the events behind the amber annotations.
-   * Non-fatal: without them the amounts still show, only the links are lost.
+   * Exceptional tags, to list the period's events under the projects.
+   * Non-fatal: without them the rest of the page still reads.
    */
   async function fetchExceptionalTags() {
     try {
@@ -745,6 +1038,11 @@
     try {
       const summaries = await api.getBudgetPlans()
       planCount.value = summaries.length
+      planWindows.value = summaries.map(({ id, startDate, endDate }) => ({
+        id,
+        startDate,
+        endDate,
+      }))
     } catch {
       // Non-fatal — the count is just used to decide whether to show the
       // "Voir l'historique" hint, the rest of the page still renders.
@@ -791,8 +1089,8 @@
         fetchStatistics(),
         fetchPlanCount(),
         checkYearAgoAvailability(),
-        fetchExceptionalTags(),
         fetchProjects(),
+        fetchExceptionalTags(),
       ])
     } catch (err) {
       error.value =
@@ -804,6 +1102,7 @@
 
   async function onPlanDeleted(deletedId: string) {
     planCount.value = Math.max(0, planCount.value - 1)
+    planWindows.value = planWindows.value.filter(w => w.id !== deletedId)
     if (plan.value?.id !== deletedId) return
 
     // The displayed plan was the one that got deleted: clear local state
@@ -811,7 +1110,7 @@
     plan.value = null
     statistics.value = null
     adoptPlanEntries(null)
-    selectedMonth.value = null
+    monthChoice.value = undefined
     expandedCategories.value = new Set()
 
     isLoading.value = true
@@ -839,8 +1138,8 @@
       plan.value = loaded
       adoptPlanEntries(loaded)
       // The months on offer belong to the plan that was showing, not to this
-      // one: keep the new plan on its average until the user picks again.
-      selectedMonth.value = null
+      // one: the new plan opens on its default month until the user picks.
+      monthChoice.value = undefined
       isHistoryOpen.value = false
       // The projects too: they are read over the plan's own window.
       await Promise.all([
@@ -864,9 +1163,17 @@
   async function onPlanCreated(created: BudgetPlanDto) {
     plan.value = created
     adoptPlanEntries(created)
-    selectedMonth.value = null
+    monthChoice.value = undefined
     isModalOpen.value = false
     planCount.value++
+    planWindows.value = [
+      ...planWindows.value,
+      {
+        id: created.id,
+        startDate: created.startDate,
+        endDate: created.endDate,
+      },
+    ]
     await Promise.all([
       fetchStatistics(),
       checkYearAgoAvailability(),
@@ -888,78 +1195,79 @@
     saveError.value = null
   }
 
-  function enterEditMode(): void {
+  /**
+   * Edit mode changes the page's question: « Planification » takes the
+   * place of « Ce mois-ci », and the page brings it into view (lot 4).
+   * `focusIncome` lands on the reference income's field, the way « Ce
+   * mois-ci » offers when the plan has none.
+   */
+  function enterEditMode(options: { focusIncome?: boolean } = {}): void {
     clearSaveStatus()
-    budgetInputs.value = new Map(savedBudgets.value)
+    draft.restore()
     isEditing.value = true
+    void nextTick(() => {
+      document
+        .querySelector('[data-testid="budget-planning-band"]')
+        ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      if (options.focusIncome) {
+        document
+          .getElementById('budget-reference-income')
+          ?.focus({ preventScroll: true })
+      }
+    })
   }
 
   function cancelEdit(): void {
     clearSaveStatus()
-    budgetInputs.value = new Map(savedBudgets.value)
+    draft.restore()
     isEditing.value = false
   }
 
-  /** Categories whose draft envelope differs from what the server holds. */
-  const dirtyCategoryIds = computed(() => {
-    const ids = new Set([
-      ...savedBudgets.value.keys(),
-      ...budgetInputs.value.keys(),
-    ])
-    const changed: string[] = []
-    for (const id of ids) {
-      const before = savedBudgets.value.get(id) ?? 0
-      const after = budgetInputs.value.get(id) ?? 0
-      if (before !== after) changed.push(id)
-    }
-    return changed
-  })
-
-  const hasUnsavedChanges = computed(() => dirtyCategoryIds.value.length > 0)
-
-  /** Envelope the server holds for a category — the "before" of the diff. */
-  function getSavedBudget(categoryId: string): number {
-    return savedBudgets.value.get(categoryId) ?? 0
-  }
-
-  function isCategoryDirty(categoryId: string): boolean {
-    return getSavedBudget(categoryId) !== getBudgetForCategory(categoryId)
+  /**
+   * « Choisir une comparaison »: « Comparer avec », on the chart's card,
+   * brought to hand — the card unfolded first on a phone.
+   */
+  function chooseComparison(): void {
+    chartOpen.value = true
+    void nextTick(() => {
+      const slot = document.getElementById('budget-comparison')
+      slot?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      slot
+        ?.querySelector<HTMLElement>('[data-testid^="comparison-option-"]')
+        ?.focus({ preventScroll: true })
+    })
   }
 
   /**
-   * Totals of the whole plan, saved and draft. Deliberately over every entry
-   * rather than over the visible categories: an envelope on a category that
-   * spent nothing this window is absent from the statistics, and dropping it
-   * from the total would make the figure disagree with the plan itself.
+   * The comparison's monthly spending, the history « Marge vs historique »
+   * weighs the draft against; null while no comparison is chosen.
    */
-  function sumOf(budgets: Map<string, number>): number {
-    let total = 0
-    for (const amount of budgets.values()) total += amount
-    return total
-  }
+  const comparisonExpenseAvg = computed(() =>
+    comparisonRange.value
+      ? comparison.aggregatesFor(visibleExpenseCategories.value)
+          .comparisonExpenseAvg
+      : null
+  )
 
-  const savedPlanTotal = computed(() => sumOf(savedBudgets.value))
-  const draftPlanTotal = computed(() => sumOf(budgetInputs.value))
-  const draftDelta = computed(() => draftPlanTotal.value - savedPlanTotal.value)
-
-  /** Take the entries of a freshly loaded plan as the new saved reference. */
+  /** A freshly loaded plan: its entries are the new saved reference. */
   function adoptPlanEntries(loaded: BudgetPlanDto | null): void {
-    savedBudgets.value = new Map(
-      (loaded?.entries ?? []).map(e => [e.categoryId, e.amount])
-    )
-    budgetInputs.value = new Map(savedBudgets.value)
+    draft.adopt(loaded)
     isEditing.value = false
   }
 
   async function saveBudget() {
     if (!plan.value) return
-    const entries = Array.from(budgetInputs.value.entries())
-      .filter(([, amount]) => amount > 0)
-      .map(([categoryId, amount]) => ({ categoryId, amount }))
+    const entries = draft.entriesToSave()
     try {
       isSaving.value = true
       clearSaveStatus()
-      const updated = await api.updateBudgetPlan(plan.value.id, { entries })
+      const updated = await api.updateBudgetPlan(plan.value.id, {
+        entries,
+        // Sent only when changed: null clears it, as the API reads it.
+        ...(referenceIncomeDirty.value
+          ? { referenceIncome: referenceIncomeInput.value }
+          : {}),
+      })
       plan.value = updated
       adoptPlanEntries(updated)
       saveStatus.value = 'saved'
@@ -975,15 +1283,9 @@
     }
   }
 
-  function updateBudgetInput(categoryId: string, value: string) {
-    const num = parseFloat(value)
-    budgetInputs.value.set(categoryId, Number.isFinite(num) ? num : 0)
-  }
-
-  /** Apply an arbitrary amount to a category's budget input. */
+  /** A reference figure taken as the envelope: in edit mode only. */
   function setBudgetValue(categoryId: string, amount: number) {
-    if (!isEditing.value) return
-    budgetInputs.value.set(categoryId, Math.round(amount))
+    if (isEditing.value) draft.setBudgetValue(categoryId, amount)
   }
 
   /**
@@ -1004,28 +1306,15 @@
         averagesSource.value === 'historical'
           ? getHistoricalAverage(cat)
           : getPlanActualAverage(cat)
-      if (ref > 0) {
-        budgetInputs.value.set(cat.categoryId, Math.round(ref))
-      }
+      if (ref > 0) draft.setBudgetValue(cat.categoryId, ref)
     }
   }
 
   function adjustAllByPercent(percent: number) {
-    for (const cat of visibleExpenseCategories.value) {
-      const current = budgetInputs.value.get(cat.categoryId) ?? 0
-      if (current > 0) {
-        budgetInputs.value.set(
-          cat.categoryId,
-          Math.round(current * (1 + percent / 100))
-        )
-      }
-    }
-  }
-
-  // No confirmation needed: emptying the draft is undone by "Annuler", and
-  // nothing has left the browser until "Enregistrer".
-  function resetAllBudgets() {
-    budgetInputs.value.clear()
+    draft.adjustAllByPercent(
+      visibleExpenseCategories.value.map(c => c.categoryId),
+      percent
+    )
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -1043,7 +1332,7 @@
 
   onMounted(() => {
     window.addEventListener('beforeunload', warnOnUnload)
-    void fetchData()
+    void fetchData().then(consumeRouteActions)
   })
 
   onBeforeUnmount(() => {
@@ -1100,16 +1389,47 @@
       :is-editing="isEditing"
       @open-history="isHistoryOpen = true"
       @create="openCreateModal"
-    />
-
-    <!-- Error banner -->
-    <div
-      v-if="error"
-      role="alert"
-      class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm"
     >
+      <template #actions>
+        <!-- The same reading as the dashboard's, behind the same button. -->
+        <ReadingMenu
+          v-model:breakdown-mode="breakdownMode"
+          v-model:deduct-reimbursements="deductReimbursements"
+          v-model:deduct-pending-reimbursements="deductPendingReimbursements"
+          :has-exceptional-expenses="hasExceptionalInPlan"
+          :has-amortized-expenses="hasAmortizedInPlan"
+          :pending-sync-error="filtersStore.lastSyncError"
+          compact
+        />
+      </template>
+    </BudgetPlanHeader>
+
+    <!-- A switch or a comparison refetches the figures: said in a line
+         under the header while it runs, and with a retry when it fails. -->
+    <p
+      v-if="plan && isRefreshingStatistics"
+      role="status"
+      data-testid="budget-statistics-refreshing"
+      class="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-400"
+    >
+      Mise à jour des chiffres…
+    </p>
+    <InlineAlert
+      v-else-if="plan && statisticsError"
+      class="mb-6"
+      data-testid="budget-statistics-error"
+      retry-label="Réessayer"
+      retry-test-id="budget-statistics-retry"
+      @retry="refreshStatistics"
+    >
+      Les chiffres n’ont pas pu être mis à jour : ils correspondent encore aux
+      réglages précédents. {{ statisticsError }}
+    </InlineAlert>
+
+    <!-- A load that failed: the page's error alert, red as errors are. -->
+    <InlineAlert v-if="error" class="mb-6" data-testid="budget-error">
       {{ error }}
-    </div>
+    </InlineAlert>
 
     <!-- Initial loading -->
     <div v-if="isLoading" class="flex justify-center items-center py-20">
@@ -1168,177 +1488,152 @@
           data-testid="empty-history-button"
           @click="isHistoryOpen = true"
         >
-          Voir l'historique ({{ planCount }})
+          Voir l’historique ({{ planCount }})
         </BaseButton>
       </div>
     </div>
 
     <!-- Plan content -->
     <template v-else>
-      <!-- Filters card: reference period + reimbursement toggles -->
-      <BaseCard bordered data-testid="budget-filters-card" class="mb-6">
-        <div class="flex flex-col gap-3">
-          <ComparisonSelector
-            :plan="plan"
-            :year-ago-available="yearAgoAvailable"
-            :preset="comparisonPreset"
-            :custom-start-date="comparisonCustomStart"
-            :custom-end-date="comparisonCustomEnd"
-            @update:preset="comparisonPreset = $event"
-            @update:custom-start-date="comparisonCustomStart = $event"
-            @update:custom-end-date="comparisonCustomEnd = $event"
-            @update:range="comparisonRange = $event"
-          />
-
-          <div
-            class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
-          >
-            <label
-              for="budget-deduct-reimbursements"
-              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-            >
-              <ToggleSwitch
-                id="budget-deduct-reimbursements"
-                :checked="deductReimbursements"
-                label="Déduire les remboursements reçus"
-                @change="deductReimbursements = $event"
-              />
-              <span
-                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-              >
-                <span class="sm:hidden">Déduire les remb. reçus</span>
-                <span class="hidden sm:inline"
-                  >Déduire les remboursements reçus</span
-                >
-              </span>
-            </label>
-            <label
-              for="budget-deduct-pending"
-              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-            >
-              <ToggleSwitch
-                id="budget-deduct-pending"
-                :checked="deductPendingReimbursements"
-                label="Déduire les remboursements en attente"
-                @change="deductPendingReimbursements = $event"
-              />
-              <span
-                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-              >
-                <span class="sm:hidden">Déduire les remb. en attente</span>
-                <span class="hidden sm:inline"
-                  >Déduire les remboursements en attente</span
-                >
-              </span>
-            </label>
-          </div>
-
-          <p
-            v-if="isRefreshingStatistics"
-            role="status"
-            data-testid="budget-statistics-refreshing"
-            class="text-xs text-gray-500 dark:text-gray-400"
-          >
-            Mise à jour des chiffres…
-          </p>
-          <InlineAlert
-            v-else-if="statisticsError"
-            data-testid="budget-statistics-error"
-            retry-label="Réessayer"
-            retry-test-id="budget-statistics-retry"
-            @retry="refreshStatistics"
-          >
-            Les chiffres n'ont pas pu être mis à jour : ils correspondent encore
-            aux réglages précédents. {{ statisticsError }}
-          </InlineAlert>
-        </div>
-      </BaseCard>
-
-      <!-- The verdict first — « am I on track » is what the page is opened
-           for — then the chart it is read from. -->
-      <div class="mb-6">
-        <BudgetSavingsSummary
-          :plan-label="plan.name"
-          :plan-income-avg="chartAverageIncome"
-          :plan-budget-total="totalBudget"
-          :plan-actual-expense-avg="planActualExpenseAvg"
-          :plan-actual-income-avg="planActualIncomeAvg"
-          :complete-plan-months-count="comparison.completePlanMonthsCount.value"
-          :is-plan-finished="comparison.isPlanFinished.value"
-          :actual-period-label="selectedMonth ? actualPeriodLabel : null"
-          :month-progress="comparison.selectedMonthProgress.value"
-          :comparison="summaryComparisonProps"
-        />
-      </div>
-
-      <!-- Monthly expenses chart -->
-      <BaseCard
-        v-if="monthlyTotalExpenses.length >= 2 && statistics?.monthLabels"
-        class="mb-6"
-      >
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-          Évolution des dépenses mensuelles
-        </h2>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          Lignes de référence : revenus moyens et budget total alloué.
-        </p>
-        <MonthlyExpensesChart
-          :monthly-totals="monthlyTotalExpenses"
-          :month-labels="statistics.monthLabels"
-          :average-income="chartAverageIncome"
-          :total-budget="totalBudget"
-          :plan-start-month="plan.startDate.slice(0, 7)"
-          :plan-end-month="plan.endDate.slice(0, 7)"
-          :comparison-start-month="comparisonRange?.startMonth ?? ''"
-          :comparison-end-month="comparisonRange?.endMonth ?? ''"
-          @select-month="openMonthTransactions"
-        />
-      </BaseCard>
-
-      <!-- Month-by-month grid: which envelope drifts, and when. The
-             averages above cannot answer that — they average it away. -->
-      <BudgetMonthlyMatrix
-        v-if="showMonthlyMatrix"
-        :months="matrixMonths"
-        :rows="matrixRows"
-        :selected-month="selectedMonth"
-        :exceptional="everydayFilter"
+      <!-- « Ce mois-ci » first: holding the month is what the page is
+           opened for. « Mois lu » lives in its header and steers the rows. -->
+      <!-- A finished plan reads its review instead: « Bilan du plan »,
+           « Le plan » by default in « Mois lu », or one of its months. -->
+      <!-- Editing, the page asks what the plan foresees: « Planification »,
+           the draft's figures, the edit bar's total. -->
+      <BudgetPlanningBand
+        v-if="isEditing"
+        class="mb-6 scroll-mt-4"
+        :plan-name="plan.name"
+        :month-count="plan.monthCount"
+        :reference-income="referenceIncomeInput"
+        :saved-reference-income="savedReferenceIncome"
+        :draft-total="draftPlanTotal"
+        :saved-total="savedPlanTotal"
+        :delta="draftDelta"
+        :dirty-count="dirtyCategoryIds.length"
+        :complete-months-income="completeMonthsIncome"
+        :savings-target="plan.savingsTarget ?? null"
+        :comparison-expense-avg="comparisonExpenseAvg"
+        :comparison-label="comparisonRange?.label ?? null"
+        @update:reference-income="referenceIncomeInput = $event"
+        @choose-comparison="chooseComparison"
       />
+      <BudgetReviewBand
+        v-else-if="reviewReading"
+        class="mb-6"
+        :reading="reviewReading"
+        :plan-name="plan.name"
+        :plan-start="plan.startDate"
+        :plan-end="plan.endDate"
+        :month-options="monthOptions"
+        :selected-month="rowSelectedMonth"
+        :projects="projects"
+        :project-reserve="plan.projectReserve ?? null"
+        @select-month="selectMonth"
+        @show-envelope="showEnvelope"
+      />
+      <BudgetMonthBand
+        v-else-if="monthReading"
+        class="mb-6"
+        :reading="monthReading"
+        :plan-start="plan.startDate"
+        :month-options="monthOptions"
+        :selected-month="rowSelectedMonth"
+        :complete-months-count="comparison.completePlanMonthsCount.value"
+        @select-month="selectMonth"
+        @show-envelope="showEnvelope"
+        @edit="enterEditMode({ focusIncome: true })"
+      />
+
+      <!-- The months, before the envelopes (Richard, 2026-10-24): a card
+           open on a desk, folded below md as the dashboard's chart is,
+           drawn once open (Apex measures its box, a folded one is 0px).
+           « Comparer avec » lives here, in tracking as in editing: one
+           selector, one state, the past drawn in grey beside the plan. -->
+      <BaseCard
+        v-if="showChartCard && statistics?.monthLabels"
+        as="section"
+        bordered
+        padding="none"
+        class="mb-6"
+        data-testid="budget-chart-card"
+        aria-labelledby="budget-chart-title"
+      >
+        <details
+          data-testid="budget-chart-details"
+          class="group"
+          :open="chartOpen"
+          @toggle="onChartToggle"
+        >
+          <summary
+            data-testid="budget-chart-toggle"
+            class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:px-6 [&::-webkit-details-marker]:hidden"
+          >
+            <h2
+              id="budget-chart-title"
+              class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+            >
+              Dépenses et enveloppe par mois
+            </h2>
+            <span
+              aria-hidden="true"
+              class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+              >▾</span
+            >
+          </summary>
+          <div v-if="chartOpen" class="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
+            <ComparisonSelector
+              id="budget-comparison"
+              :plan="plan"
+              :year-ago-available="yearAgoAvailable"
+              :preset="comparisonPreset"
+              :custom-start-date="comparisonCustomStart"
+              :custom-end-date="comparisonCustomEnd"
+              @update:preset="comparisonPreset = $event"
+              @update:custom-start-date="comparisonCustomStart = $event"
+              @update:custom-end-date="comparisonCustomEnd = $event"
+              @update:range="comparisonRange = $event"
+            />
+            <MonthlyExpensesChart
+              v-if="showMonthlyChart"
+              :monthly-totals="monthlyTotalExpenses"
+              :month-labels="statistics.monthLabels"
+              :average-income="chartAverageIncome"
+              :total-budget="draftPlanTotal"
+              :exceptional-totals="monthlyExceptionalTotals"
+              :plan-start-month="chartRanges.planStartMonth"
+              :plan-end-month="chartRanges.planEndMonth"
+              :comparison-start-month="chartRanges.comparisonStartMonth"
+              :comparison-end-month="chartRanges.comparisonEndMonth"
+              :current-month="currentYearMonth()"
+              @select-month="openMonthTransactions"
+            />
+            <p
+              v-else
+              data-testid="budget-chart-one-month"
+              class="text-xs text-gray-500 dark:text-gray-400"
+            >
+              Un seul mois à dessiner : choisissez une comparaison pour voir les
+              mois d’avant.
+            </p>
+          </div>
+        </details>
+      </BaseCard>
 
       <!-- Expense category list -->
       <BaseCard bordered>
         <BudgetTableControls
           v-model:sort-order="sortOrder"
           :editing="isEditing"
-          :month-options="monthOptions"
-          :selected-month="selectedMonth"
-          :complete-months-count="comparison.completePlanMonthsCount.value"
-          :actual-period-label="actualPeriodLabel"
           :plan-is-past="planStatus(plan) === 'past'"
-          :has-exceptional="hasExceptionalInPlan"
-          :breakdown-mode="breakdownMode"
-          :plan-events="planEvents"
-          :has-amortized="hasAmortizedInPlan"
           :averages-source="averagesSource"
-          @enter-edit="enterEditMode"
-          @select-month="selectMonth"
+          @enter-edit="enterEditMode()"
           @apply-averages="applyAverageToAll"
           @adjust-percent="adjustAllByPercent"
           @reset="resetAllBudgets"
-          @set-mode="setBreakdownMode"
-          @open-tag="openTagAnalysis"
-        />
-
-        <BudgetProjectsSection
-          :projects="projects"
-          :plan="plan"
-          @open-tag="openTagAnalysis"
-        />
-
-        <BudgetAmortizedSection
-          :purchases="planSmoothedPurchases"
-          :current-month="currentYearMonth()"
-        />
+        >
+        </BudgetTableControls>
 
         <!-- One grid for the whole table: the header and every row are
              subgrids of it, so each `auto` track is sized over all the rows
@@ -1432,6 +1727,7 @@
               :running-month="currentYearMonth()"
               :selected-month="rowSelectedMonth"
               :chart-data="categoryChartData(cat)"
+              :chart-overlay="categoryChartOverlay(cat)"
               :breakdown-mode="breakdownMode"
               :historical-window="historicalWindow"
               :actual-window="actualWindow"
@@ -1450,11 +1746,64 @@
             />
           </div>
         </div>
+
+        <!-- Under the envelopes, folded: the projects charged against the
+             reserve, the smoothed purchases (everyday reading only), then
+             the month-by-month grid. -->
+        <div data-testid="budget-folded-lines" class="mt-2">
+          <BudgetProjectsLine
+            :projects="projects"
+            :plan="plan"
+            :events="planEvents"
+            @open-tag="openTagAnalysis"
+          />
+          <BudgetAmortizedLine
+            :purchases="planSmoothedPurchases"
+            :current-month="currentYearMonth()"
+          />
+
+          <!-- Month by month, every envelope at once: folded everywhere,
+               an occasional reading the rows already carry month by month. -->
+          <details
+            v-if="showMonthlyMatrix"
+            data-testid="budget-matrix-details"
+            class="group border-t border-gray-100 text-[13px] dark:border-slate-700"
+          >
+            <summary
+              data-testid="budget-matrix-toggle"
+              class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-4 px-4 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden"
+            >
+              <span class="font-semibold text-gray-900 dark:text-gray-100">
+                Mois par mois
+              </span>
+              <span
+                aria-hidden="true"
+                class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+                >▾</span
+              >
+            </summary>
+            <div class="px-4 pb-4">
+              <BudgetMonthlyMatrix
+                :months="matrixMonths"
+                :rows="matrixRows"
+                :selected-month="selectedMonth"
+                :exceptional="everydayFilter"
+              />
+            </div>
+          </details>
+        </div>
       </BaseCard>
+
+      <!-- « À faire » at the foot of the page (Richard, 2026-10-24): an
+           envelope over, the project reserve overdrawn, a category without
+           an envelope, the next plan. The dashboard's card; nothing
+           rendered when nothing is to do, nor while editing. -->
+      <TodoCard v-if="!isEditing" class="mt-6" :items="budgetTodoItems" />
 
       <BudgetEditBar
         v-if="isEditing || saveStatus === 'saved'"
         :dirty-count="dirtyCategoryIds.length"
+        :income-changed="referenceIncomeDirty"
         :saved-total="savedPlanTotal"
         :draft-total="draftPlanTotal"
         :delta="draftDelta"

@@ -9,8 +9,10 @@
   import {
     formatCompactCurrency,
     formatCurrency,
+    formatEuros,
     formatMonth,
   } from '@/lib/formatters'
+  import { useMediaQuery } from '@/composables/useMediaQuery'
   import MonthsVsBudgetChart from '@/components/budget/MonthsVsBudgetChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
@@ -18,6 +20,13 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import {
+    DATA_HUE,
+    STATE_BADGE_CLASSES,
+    STATE_COLORS,
+    gapOf,
+    type StateTone,
+  } from '@/lib/stateTints'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
@@ -66,6 +75,12 @@
     /** The month the page isolated, if any, drawn on a band. */
     selectedMonth?: string | null | undefined
     chartData: { labels: string[]; values: number[] }
+    /**
+     * The events' part of each month, stacked hatched on the drill-down
+     * chart over `chartData` (then the rest of each month) — in the real
+     * reading only, as on the dashboard's rows. Undefined otherwise.
+     */
+    chartOverlay?: { values: number[]; label: string } | undefined
     breakdownMode: 'real' | 'everyday'
     /**
      * The windows the two reference figures cover, for the links to the
@@ -221,7 +236,7 @@
         v => v > props.budget + TOLERANCE
       ).length
       parts.push(
-        `${over === 0 ? 'aucun' : over} au-dessus de l'enveloppe de ${formatCompactCurrency(props.budget)}`
+        `${over === 0 ? 'aucun' : over} au-dessus de l’enveloppe de ${formatCompactCurrency(props.budget)}`
       )
     } else {
       parts.push('sans enveloppe')
@@ -282,6 +297,93 @@
       props.breakdownMode === 'everyday' &&
       (props.amortizedAverage ?? 0) > TOLERANCE
   )
+  /**
+   * The state of the figure against its envelope: to date on a month still
+   * running, whole otherwise — the same rule as « Ce mois-ci ». Neutral
+   * within ±5 % or without an envelope.
+   */
+  const envelopeTone = computed<StateTone>(
+    () => gapOf(props.actualAverage, props.proratedBudget ?? props.budget).tone
+  )
+
+  const envelopeBadge = computed(() => {
+    if (envelopeTone.value === 'under') return 'sous l’enveloppe'
+    if (envelopeTone.value === 'over') return 'au-dessus de l’enveloppe'
+    return 'dans l’enveloppe'
+  })
+
+  /**
+   * « 3 mois sur 4 sous l'enveloppe »: the plan months already closed —
+   * the running one is not judged on a total it has not reached — held
+   * within the envelope. Null with no closed month or no envelope.
+   */
+  const monthsHeld = computed(() => {
+    if (props.budget <= TOLERANCE) return null
+    const closed = props.planMonthValues.filter(
+      (_, i) => props.planMonths[i] !== props.runningMonth
+    )
+    if (closed.length === 0) return null
+    const held = closed.filter(v => v <= props.budget + TOLERANCE).length
+    return `${held} mois sur ${closed.length} sous l’enveloppe`
+  })
+
+  /** The envelope's fact, only once there is an actual to read it with. */
+  const showEnvelopeFacts = computed(
+    () => props.showActual && props.budget > TOLERANCE
+  )
+
+  /** « Marge vs historique », a planning fact: in edit mode only. */
+  const showMargin = computed(
+    () =>
+      props.editing &&
+      props.showHistorical &&
+      props.budget > TOLERANCE &&
+      props.historicalAverage > 0
+  )
+
+  const signedCurrency = (value: number): string =>
+    `${value > 0 ? '+' : value < 0 ? '−' : ''}${formatCurrency(Math.abs(value))}`
+
+  /** The drill-down chart's dashed line: the envelope, when there is one. */
+  const chartReference = computed(() =>
+    props.budget > TOLERANCE ? props.budget : undefined
+  )
+
+  // ── A phone (budget-refonte.md, lot 7) ────────────────────────────────
+  // Tracking, the row is two lines: the name and its badge with « 162 € /
+  // 150 € », then a bar of what the envelope has taken — the data hue,
+  // amber past it — with the envelope's share to date as a tick on a
+  // running month. No mini-columns: they wait on a desk. Editing, the
+  // field stands under the name, the whole width.
+  const isPhone = useMediaQuery('(max-width: 639.98px)')
+
+  /** The bar is the envelope consumed: only with an actual and an envelope. */
+  const showBar = computed(
+    () => !props.editing && props.showActual && props.budget > TOLERANCE
+  )
+  const isOver = computed(() => props.actualAverage > props.budget + TOLERANCE)
+  const barWidth = computed(() =>
+    Math.min(100, Math.max(0, (props.actualAverage / props.budget) * 100))
+  )
+  const barColor = computed(() => (isOver.value ? STATE_COLORS.over : DATA_HUE))
+  /** Where the envelope to date falls on the bar, on a running month. */
+  const barTick = computed(() =>
+    props.proratedBudget === null
+      ? null
+      : Math.min(100, (props.proratedBudget / props.budget) * 100)
+  )
+  /** The bar said in words: « 162 € sur 150 €, 12 € au-dessus ». */
+  const barLabel = computed(() => {
+    const parts = [
+      `${formatEuros(props.actualAverage)} sur ${formatEuros(props.budget)}`,
+    ]
+    if (isOver.value)
+      parts.push(`${formatEuros(props.actualAverage - props.budget)} au-dessus`)
+    if (props.proratedBudget !== null)
+      parts.push(`${formatEuros(props.proratedBudget)} d’enveloppe à ce jour`)
+    return parts.join(', ')
+  })
+
   const showHistoricalLink = computed(
     () =>
       props.showHistorical &&
@@ -293,7 +395,9 @@
 <template>
   <!-- A subgrid of the page's table from `sm`: the columns are the
        table's, sized over every row. -->
+  <!-- The id is the anchor « Voir la ligne » and « À faire » scroll to. -->
   <div
+    :id="`budget-row-${category.categoryId}`"
     :data-testid="`budget-row-${category.categoryName}`"
     class="sm:col-span-full sm:grid sm:grid-cols-subgrid"
   >
@@ -302,13 +406,17 @@
          name, then the three numbers side by side. -->
     <div
       class="col-span-full grid sm:grid-cols-subgrid sm:gap-x-6 gap-x-3 gap-y-2 sm:gap-y-0 items-center py-3 sm:py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
-      :class="editing ? 'grid-cols-3' : 'grid-cols-[minmax(0,1fr)_auto_auto]'"
+      :class="
+        editing
+          ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+          : 'grid-cols-[minmax(0,1fr)_auto_auto]'
+      "
     >
       <!-- Name + chevron + status badge -->
       <button
         type="button"
         class="flex items-center gap-2 min-w-0 text-left sm:col-span-1 sm:col-start-auto sm:row-start-auto"
-        :class="editing ? 'col-span-2' : 'col-start-1 row-start-1'"
+        :class="editing ? 'col-span-2 row-start-1' : 'col-start-1 row-start-1'"
         :aria-expanded="expanded"
         @click="emit('toggle-expand')"
       >
@@ -322,20 +430,28 @@
         <span class="font-medium text-gray-900 dark:text-gray-100 truncate">
           {{ category.categoryName }}
         </span>
-        <!-- Status badge: over budget ⚠ or budget covers history ✓ -->
+        <!-- Status badge: the envelope spent past, in the state amber.
+             « Couvert » (the envelope covers the history) is a planning
+             fact: in edit mode only. -->
         <span
           v-if="rowStatus === 'over'"
-          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+          :data-testid="`budget-status-${category.categoryName}`"
+          data-tone="over"
+          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0"
+          :class="STATE_BADGE_CLASSES.over"
           title="Dépassement par rapport au budget"
         >
-          ⚠ Dépassé
+          Dépassé
         </span>
         <span
-          v-else-if="rowStatus === 'covered'"
-          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+          v-else-if="rowStatus === 'covered' && editing"
+          :data-testid="`budget-status-${category.categoryName}`"
+          data-tone="neutral"
+          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0"
+          :class="STATE_BADGE_CLASSES.neutral"
           title="Le budget couvre la moyenne historique"
         >
-          ✓ Couvert
+          Couvert
         </span>
       </button>
 
@@ -346,7 +462,7 @@
         class="text-sm tabular-nums leading-tight sm:block sm:text-right sm:col-span-1 sm:row-start-auto"
         :class="
           editing
-            ? 'text-right'
+            ? 'col-start-1 row-start-3 sm:col-start-auto'
             : 'col-span-3 row-start-2 flex items-baseline justify-between gap-2'
         "
       >
@@ -376,7 +492,10 @@
 
       <!-- Editing: the envelope field, then « Réel » beside it. -->
       <template v-if="editing">
-        <div class="text-right">
+        <!-- On a phone the field stands under the name, the whole width. -->
+        <div
+          class="col-span-full row-start-2 text-right sm:col-span-1 sm:row-start-auto"
+        >
           <span
             class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
             >Enveloppe</span
@@ -394,7 +513,7 @@
               :class="
                 dirty
                   ? 'border-primary-500 dark:border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                  : 'border-primary-300 dark:border-primary-800'
+                  : 'border-gray-300 dark:border-slate-600'
               "
               @input="
                 emit('update-budget', ($event.target as HTMLInputElement).value)
@@ -418,7 +537,8 @@
 
         <div
           v-if="showActual"
-          class="text-right text-sm tabular-nums leading-tight"
+          class="row-start-3 text-sm tabular-nums leading-tight sm:col-start-auto sm:row-start-auto sm:text-right"
+          :class="showHistorical ? 'col-start-2' : 'col-start-1'"
         >
           <span
             class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
@@ -451,17 +571,39 @@
         v-else
         class="col-start-2 row-start-1 text-right text-sm tabular-nums leading-tight whitespace-nowrap sm:col-start-auto sm:row-start-auto"
       >
-        <template v-if="showActual">
-          <span class="block font-semibold text-gray-900 dark:text-gray-100">
-            {{ actualAverage > 0 ? formatCurrency(actualAverage) : '—' }}
-          </span>
+        <!-- « 162 € sur 150 € », one figure in the ink; on a phone in
+             whole euros, « 162 € / 150 € », the bar under it. -->
+        <span
+          v-if="showActual && isPhone"
+          class="block text-gray-900 dark:text-gray-100"
+          :data-testid="`budget-figure-${category.categoryName}`"
+        >
+          <span class="font-semibold">{{
+            actualAverage > 0 ? formatEuros(actualAverage) : '—'
+          }}</span>
           <span
+            class="text-xs text-gray-500 dark:text-gray-400"
             :data-testid="`budget-value-${category.categoryName}`"
-            class="block text-xs text-gray-500 dark:text-gray-400"
+            >{{
+              budget > TOLERANCE
+                ? ` / ${formatEuros(budget)}`
+                : ' · sans enveloppe'
+            }}</span
           >
-            {{ envelopeNote }}
-          </span>
-        </template>
+        </span>
+        <span
+          v-else-if="showActual"
+          class="block text-gray-900 dark:text-gray-100"
+          :data-testid="`budget-figure-${category.categoryName}`"
+        >
+          <span class="font-semibold">{{
+            actualAverage > 0 ? formatCurrency(actualAverage) : '—'
+          }}</span>
+          {{ ' ' }}
+          <span :data-testid="`budget-value-${category.categoryName}`">{{
+            envelopeNote
+          }}</span>
+        </span>
         <template v-else>
           <span
             v-if="budget > 0"
@@ -481,7 +623,7 @@
         <!-- On a month still running, the envelope's fair share to date —
              so a half-finished month is judged on pace. -->
         <span
-          v-if="proratedBudget !== null"
+          v-if="proratedBudget !== null && !isPhone"
           :data-testid="`budget-prorata-${category.categoryName}`"
           class="block text-xs text-gray-500 dark:text-gray-400"
           title="Part du budget correspondant aux jours écoulés"
@@ -500,6 +642,28 @@
           :running-month="runningMonth"
           :selected-month="selectedMonth ?? undefined"
           :label="chartLabel"
+        />
+      </div>
+
+      <!-- A phone: what the envelope has taken, the second line. -->
+      <div
+        v-if="showBar && isPhone"
+        role="img"
+        :aria-label="barLabel"
+        :data-testid="`budget-bar-${category.categoryName}`"
+        class="relative col-span-3 row-start-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+      >
+        <span
+          class="block h-full rounded-full"
+          :style="{ width: `${barWidth}%`, backgroundColor: barColor }"
+          :data-tone="isOver ? 'over' : 'data'"
+          :data-testid="`budget-bar-fill-${category.categoryName}`"
+        />
+        <span
+          v-if="barTick !== null"
+          class="absolute inset-y-0 w-0.5 bg-gray-700 dark:bg-gray-300"
+          :style="{ left: `${barTick}%` }"
+          :data-testid="`budget-bar-tick-${category.categoryName}`"
         />
       </div>
 
@@ -522,86 +686,67 @@
       v-if="expanded"
       class="col-span-full min-w-0 bg-gray-50 dark:bg-slate-800/40 px-4 py-5 border-t border-gray-100 dark:border-slate-700 space-y-5"
     >
-      <!-- Margin / remaining quick summary -->
-      <div
-        v-if="budget > 0 && (showHistorical || showActual)"
-        class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm"
-        :data-testid="`budget-row-detail-${category.categoryName}`"
-      >
-        <div
-          v-if="showHistorical"
-          class="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3"
-        >
-          <div
-            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-          >
-            Marge vs historique
-          </div>
-          <div
-            class="text-lg font-bold tabular-nums"
-            :class="
-              marginVsHistorical > 0
-                ? 'text-green-700 dark:text-green-400'
-                : marginVsHistorical < 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500 dark:text-gray-400'
-            "
-          >
-            {{ marginVsHistorical > 0 ? '+' : ''
-            }}{{ formatCurrency(marginVsHistorical) }}
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <template v-if="marginVsHistorical > 0">
-              Budget plus généreux que la moyenne passée
-            </template>
-            <template v-else-if="marginVsHistorical < 0">
-              Budget plus serré que la moyenne passée
-            </template>
-            <template v-else>Budget aligné sur la moyenne passée</template>
-          </p>
-        </div>
-        <div
-          v-if="showActual"
-          class="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3"
-        >
-          <div
-            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-          >
-            Reste à dépenser
-          </div>
-          <div
-            class="text-lg font-bold tabular-nums"
-            :class="
-              remainingVsActual > 0
-                ? 'text-green-700 dark:text-green-400'
-                : remainingVsActual < 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500 dark:text-gray-400'
-            "
-          >
-            {{ remainingVsActual > 0 ? '+' : ''
-            }}{{ formatCurrency(remainingVsActual) }}
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <template v-if="remainingVsActual > 0">
-              Marge disponible vs la moyenne réelle
-            </template>
-            <template v-else-if="remainingVsActual < 0">
-              Dépassement par rapport au budget
-            </template>
-            <template v-else>Budget pile consommé</template>
-          </p>
-        </div>
-      </div>
-
-      <!-- What the row's figure leaves unsaid, each with the rows behind
-           it: the comparison's figure, the events' share, the smoothed
-           slices. -->
+      <!-- What the row's figure leaves unsaid, in one list of facts in the
+           ink, each with the rows behind it: what is left of the envelope
+           and the months held, the margin on the history (edit mode), the
+           comparison's figure, the events' share, the smoothed slices. -->
       <ul
-        v-if="showHistoricalLink || showExceptional || showAmortized"
+        v-if="
+          showEnvelopeFacts ||
+          showMargin ||
+          showHistoricalLink ||
+          showExceptional ||
+          showAmortized
+        "
         :data-testid="`budget-row-facts-${category.categoryName}`"
         class="space-y-1 text-xs text-gray-500 tabular-nums dark:text-gray-400"
       >
+        <li
+          v-if="showEnvelopeFacts"
+          :data-testid="`budget-row-envelope-${category.categoryName}`"
+          class="flex flex-wrap items-center gap-x-2 gap-y-1"
+        >
+          <span v-if="remainingVsActual >= 0">
+            Reste
+            <strong class="font-semibold text-gray-900 dark:text-gray-100">{{
+              formatCurrency(remainingVsActual)
+            }}</strong>
+            sur l’enveloppe
+          </span>
+          <span v-else>
+            Dépassement de
+            <strong class="font-semibold text-gray-900 dark:text-gray-100">{{
+              formatCurrency(-remainingVsActual)
+            }}</strong>
+            sur l’enveloppe
+          </span>
+          <template v-if="monthsHeld">
+            <span aria-hidden="true">·</span>
+            <span
+              :data-testid="`budget-row-months-held-${category.categoryName}`"
+            >
+              {{ monthsHeld }}
+            </span>
+          </template>
+          <span
+            :data-testid="`budget-row-badge-${category.categoryName}`"
+            :data-tone="envelopeTone"
+            class="rounded-full px-2 py-0.5 font-semibold"
+            :class="STATE_BADGE_CLASSES[envelopeTone]"
+          >
+            {{ envelopeBadge }}
+          </span>
+        </li>
+        <li
+          v-if="showMargin"
+          :data-testid="`budget-row-margin-${category.categoryName}`"
+        >
+          Marge vs historique :
+          <strong class="font-semibold text-gray-900 dark:text-gray-100">{{
+            signedCurrency(marginVsHistorical)
+          }}</strong>
+          par mois
+        </li>
         <li
           v-if="showHistoricalLink && historicalWindow"
           class="flex flex-wrap items-center gap-x-2"
@@ -629,7 +774,7 @@
             <strong class="font-semibold text-gray-900 dark:text-gray-100">{{
               formatCurrency(exceptionalAverage)
             }}</strong>
-            d'événements
+            d’événements
           </span>
           <TransactionsLink
             v-if="actualWindow"
@@ -691,7 +836,7 @@
               }}
               <span
                 v-if="readsEveryday(sub) && (sub.amortizedAmount ?? 0) > 0.005"
-                class="block text-[10px] font-normal text-teal-700 dark:text-teal-400"
+                class="block text-[10px] font-normal text-gray-500 dark:text-gray-400"
               >
                 dont {{ formatCurrency(sub.amortizedAmount ?? 0) }} lissés
               </span>
@@ -723,12 +868,17 @@
       <div v-if="(category.monthlyAmounts?.length ?? 0) >= 2">
         <SectionLabel as="h3" class="mb-2"> Évolution mensuelle </SectionLabel>
         <!-- A bar opens its month; the links beside the figures above
-             are the keyboard way to the same category. -->
+             are the keyboard way to the same category. The dashed line
+             is the envelope; in the real reading the events stack
+             hatched on the rest of each month, as on the dashboard. -->
         <MonthlyBarChart
           :data="chartData"
           :title="category.categoryName"
-          color="#ef4444"
+          :color="DATA_HUE"
+          :negative-color="STATE_COLORS.neutral"
           :months="monthKeys"
+          :reference="chartReference"
+          :overlay="chartOverlay"
           @select-month="month => emit('select-month', month)"
         />
       </div>

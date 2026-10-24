@@ -22,7 +22,7 @@ describe('SparklineChart', () => {
     expect(wrapper.find('circle').attributes()).toMatchObject({
       cx: '96',
       cy: '2',
-      fill: '#818cf8',
+      fill: '#60a5fa',
     })
     expect(wrapper.find('line').exists()).toBe(false)
   })
@@ -63,7 +63,7 @@ describe('SparklineChart', () => {
     })
     expect(line.attributes('stroke-dasharray')).toBeTruthy()
     expect(wrapper.find('circle').attributes('fill')).toBe('#111827')
-    expect(wrapper.find('polyline').attributes('stroke')).toBe('#818cf8')
+    expect(wrapper.find('polyline').attributes('stroke')).toBe('#60a5fa')
   })
 
   it('keeps a reference above the series in view', () => {

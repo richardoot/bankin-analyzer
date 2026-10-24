@@ -109,11 +109,9 @@
           <strong
             class="text-sm tabular-nums"
             :class="
-              projectedSavings > 0
-                ? 'text-green-700 dark:text-green-400'
-                : projectedSavings < 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500 dark:text-gray-400'
+              projectedSavings < 0
+                ? 'text-amber-700 dark:text-amber-400'
+                : 'text-gray-900 dark:text-gray-100'
             "
           >
             {{ projectedSavings > 0 ? '+' : ''
@@ -177,7 +175,7 @@
             class="text-sm tabular-nums"
             :class="
               monthlyProjectReserve < 0
-                ? 'text-red-600 dark:text-red-400'
+                ? 'text-amber-700 dark:text-amber-400'
                 : 'text-gray-900 dark:text-gray-100'
             "
           >
@@ -197,8 +195,8 @@
           class="mt-2 leading-snug"
           :class="
             reserveGap < 0
-              ? 'text-red-700 dark:text-red-400'
-              : 'text-green-700 dark:text-green-400'
+              ? 'text-amber-800 dark:text-amber-300'
+              : 'text-gray-600 dark:text-gray-400'
           "
         >
           <template v-if="reserveGap < 0">
@@ -262,7 +260,7 @@
                 row.category.reimbursement && row.category.reimbursement > 0
               "
               :data-testid="`preview-reimbursement-${row.category.categoryName}`"
-              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300"
               :title="`Remboursements reçus déduits : ${formatCurrency(row.category.reimbursement)}`"
             >
               −{{ formatCurrency(row.category.reimbursement) }} reçus
@@ -282,7 +280,7 @@
             <span
               v-if="row.excluded > 0.005"
               :data-testid="`preview-exceptional-${row.category.categoryName}`"
-              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300"
               :title="`Part exceptionnelle exclue de l'enveloppe : ${formatCurrency(row.excluded)}/mois sur une moyenne de ${formatCurrency(row.category.averagePerMonth)}`"
             >
               −{{ formatCurrency(row.excluded) }} exceptionnel

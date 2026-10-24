@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed } from 'vue'
+  import { DATA_HUE } from '@/lib/stateTints'
 
   /**
    * A small line over a series, in two readings.
@@ -12,6 +13,9 @@
    *
    * `reference` draws a dashed horizontal line at that value — an average,
    * an envelope — in the end color; the scale widens to keep it in view.
+   *
+   * The line is drawn in the one data hue (`DATA_HUE`) unless a caller
+   * gives its own — a category's colour on the dashboard's list.
    */
   const props = withDefaults(
     defineProps<{
@@ -29,7 +33,7 @@
     {
       width: 96,
       height: 28,
-      color: '#818cf8', // indigo-400
+      color: DATA_HUE,
       baseline: 'min',
       reference: undefined,
       endColor: undefined,

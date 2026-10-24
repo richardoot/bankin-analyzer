@@ -69,7 +69,8 @@
   function statusClass(s: Status): string {
     switch (s) {
       case 'current':
-        return 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+        // A status, not an action: the ink (primary marks the plan shown).
+        return 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100'
       case 'future':
         return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
       case 'past':
@@ -172,7 +173,7 @@
       v-else-if="plans.length === 0"
       class="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
     >
-      Aucun budget enregistré pour l'instant.
+      Aucun budget enregistré pour l’instant.
     </p>
 
     <!-- Phone: one card per plan -->
@@ -223,7 +224,7 @@
             </span>
             <span
               v-if="plan.id === activePlanId"
-              class="ml-1.5 text-xs text-primary-700 dark:text-primary-400"
+              class="ml-1.5 text-xs text-gray-500 dark:text-gray-400"
             >
               (affiché)
             </span>
@@ -280,7 +281,7 @@
             {{ plan.name }}
             <span
               v-if="plan.id === activePlanId"
-              class="ml-1.5 text-xs text-primary-700 dark:text-primary-400"
+              class="ml-1.5 text-xs text-gray-500 dark:text-gray-400"
             >
               (affiché)
             </span>

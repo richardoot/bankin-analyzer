@@ -1,9 +1,12 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import BudgetCategoryRow from './BudgetCategoryRow.vue'
 import MonthsVsBudgetChart from './MonthsVsBudgetChart.vue'
+import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
 import type { CategoryAverageDto } from '@/lib/api'
+import { DATA_HUE, STATE_BADGE_CLASSES, STATE_COLORS } from '@/lib/stateTints'
 
 // The row links to the Transactions page: RouterLink needs a router.
 const router = createRouter({
@@ -12,6 +15,16 @@ const router = createRouter({
     { path: '/', component: { template: '<div />' } },
     { path: '/transactions', component: { template: '<div />' } },
   ],
+})
+
+/** Below `sm`, when set: the row in two lines and a bar. */
+const phone = vi.hoisted(() => ({ value: false }))
+vi.mock('@/composables/useMediaQuery', () => ({
+  useMediaQuery: () => ref(phone.value),
+  useIsMobile: () => ref(phone.value),
+}))
+afterEach(() => {
+  phone.value = false
 })
 
 vi.mock('vue3-apexcharts/core', () => ({
@@ -80,7 +93,7 @@ describe('BudgetCategoryRow', () => {
   it('says the chart in words: months, those above, the running one', () => {
     const chart = mountRow().findComponent(MonthsVsBudgetChart)
     expect(chart.props('label')).toMatch(
-      /^5 mois, 2 au-dessus de l'enveloppe de 133\s€, octobre en cours$/
+      /^5 mois, 2 au-dessus de l’enveloppe de 133\s€, octobre en cours$/
     )
   })
 
@@ -91,7 +104,7 @@ describe('BudgetCategoryRow', () => {
     }).findComponent(MonthsVsBudgetChart)
     expect(chart.props('selectedMonth')).toBe('2026-07')
     expect(chart.props('label')).toMatch(
-      /^5 mois, aucun au-dessus de l'enveloppe de 500\s€, octobre en cours, juillet isolé$/
+      /^5 mois, aucun au-dessus de l’enveloppe de 500\s€, octobre en cours, juillet isolé$/
     )
   })
 
@@ -145,5 +158,233 @@ describe('BudgetCategoryRow', () => {
     expect(
       wrapper.find('[data-testid="budget-actual-link-Alimentation"]').exists()
     ).toBe(true)
+  })
+
+  it('writes the figure in the ink, « 130 € sur 133 € » on one line, the prorata in grey', () => {
+    const wrapper = mountRow({ proratedBudget: 99 })
+    const figure = wrapper.get('[data-testid="budget-figure-Alimentation"]')
+    expect(figure.classes()).toContain('text-gray-900')
+    expect(figure.text().replace(/\s+/g, ' ')).toBe('130,00 € sur 133 €')
+    const prorata = wrapper.get('[data-testid="budget-prorata-Alimentation"]')
+    expect(prorata.classes()).toContain('text-gray-500')
+    expect(prorata.text()).toMatch(/^99\s€ à ce jour$/)
+  })
+
+  it('carries the anchor of its category', () => {
+    expect(
+      mountRow().get('[data-testid="budget-row-Alimentation"]').attributes('id')
+    ).toBe('budget-row-cat-food')
+  })
+
+  it('says « Dépassé » in the state amber, without a sign', () => {
+    const badge = mountRow({ rowStatus: 'over' }).get(
+      '[data-testid="budget-status-Alimentation"]'
+    )
+    expect(badge.text()).toBe('Dépassé')
+    expect(badge.attributes('data-tone')).toBe('over')
+    expect(badge.classes()).toEqual(
+      expect.arrayContaining(STATE_BADGE_CLASSES.over.split(' '))
+    )
+    expect(badge.classes().some(c => /red|green/.test(c))).toBe(false)
+  })
+
+  it('keeps « Couvert » for edit mode', () => {
+    expect(
+      mountRow({ rowStatus: 'covered' })
+        .find('[data-testid="budget-status-Alimentation"]')
+        .exists()
+    ).toBe(false)
+    const badge = mountRow({ rowStatus: 'covered', editing: true }).get(
+      '[data-testid="budget-status-Alimentation"]'
+    )
+    expect(badge.text()).toBe('Couvert')
+    expect(badge.text()).not.toContain('✓')
+    expect(badge.classes()).toEqual(
+      expect.arrayContaining(STATE_BADGE_CLASSES.neutral.split(' '))
+    )
+  })
+
+  describe('the drill-down', () => {
+    const facts = (wrapper: ReturnType<typeof mountRow>) =>
+      wrapper.get('[data-testid="budget-row-envelope-Alimentation"]')
+
+    it('says what is left and the months held, in one line of facts in the ink', () => {
+      // 4 closed months (October runs): 120 and 90 under 133, 150 and 140 above.
+      const wrapper = mountRow({ expanded: true, remainingVsActual: 38 })
+      const line = facts(wrapper)
+      expect(line.text().replace(/\s+/g, ' ')).toMatch(
+        /^Reste 38,00 € sur l’enveloppe ·\s?2 mois sur 4 sous l’enveloppe/
+      )
+      expect(line.get('strong').classes()).toContain('text-gray-900')
+      // The two tiles in green and red are gone.
+      expect(
+        wrapper.find('[data-testid="budget-row-detail-Alimentation"]').exists()
+      ).toBe(false)
+      expect(wrapper.html()).not.toMatch(/\btext-(?:red|green)-\d/)
+    })
+
+    it('badges the state against the envelope, to date on a running month', () => {
+      const badge = (overrides: Partial<Props>) =>
+        facts(mountRow({ expanded: true, ...overrides })).get(
+          '[data-testid="budget-row-badge-Alimentation"]'
+        )
+      // 130 on 133: within 5 %.
+      expect(badge({}).attributes('data-tone')).toBe('neutral')
+      expect(badge({}).text()).toBe('dans l’enveloppe')
+      // 130 on 99 to date: above.
+      const over = badge({ proratedBudget: 99 })
+      expect(over.attributes('data-tone')).toBe('over')
+      expect(over.text()).toBe('au-dessus de l’enveloppe')
+      expect(over.classes()).toContain('bg-amber-50')
+      // 80 on 133: under.
+      expect(badge({ actualAverage: 80 }).attributes('data-tone')).toBe('under')
+    })
+
+    it('says an overrun as such, not as a negative rest', () => {
+      const wrapper = mountRow({
+        expanded: true,
+        actualAverage: 145,
+        remainingVsActual: -12,
+      })
+      expect(facts(wrapper).text().replace(/\s+/g, ' ')).toMatch(
+        /^Dépassement de 12,00 € sur l’enveloppe/
+      )
+    })
+
+    it('says no envelope fact without an envelope', () => {
+      const wrapper = mountRow({ expanded: true, budget: 0, savedBudget: 0 })
+      expect(
+        wrapper
+          .find('[data-testid="budget-row-envelope-Alimentation"]')
+          .exists()
+      ).toBe(false)
+    })
+
+    it('keeps « Marge vs historique » for edit mode', () => {
+      const tracking = mountRow({
+        expanded: true,
+        showHistorical: true,
+        historicalAverage: 150,
+        marginVsHistorical: -17,
+      })
+      expect(
+        tracking.find('[data-testid="budget-row-margin-Alimentation"]').exists()
+      ).toBe(false)
+      const editing = mountRow({
+        expanded: true,
+        editing: true,
+        showHistorical: true,
+        historicalAverage: 150,
+        marginVsHistorical: -17,
+      })
+      expect(
+        editing
+          .get('[data-testid="budget-row-margin-Alimentation"]')
+          .text()
+          .replace(/\s+/g, ' ')
+      ).toBe('Marge vs historique : −17,00 € par mois')
+    })
+
+    it('draws the months in the data hue against the envelope, the events hatched when given', () => {
+      const overlay = { values: [0, 20, 0, 0, 0], label: 'événements' }
+      const wrapper = mountRow({
+        expanded: true,
+        chartData: {
+          labels: ['j', 'j', 'a', 's', 'o'],
+          values: [150, 120, 90, 120, 60],
+        },
+        chartOverlay: overlay,
+      })
+      const chart = wrapper.findComponent(MonthlyBarChart)
+      expect(chart.props()).toMatchObject({
+        color: DATA_HUE,
+        reference: 133,
+        overlay,
+      })
+      expect(chart.props('color')).not.toBe('#ef4444')
+    })
+
+    it('draws no reference line without an envelope, no overlay unless given', () => {
+      const chart = mountRow({
+        expanded: true,
+        budget: 0,
+        savedBudget: 0,
+        chartData: { labels: ['a', 'b'], values: [1, 2] },
+      }).findComponent(MonthlyBarChart)
+      expect(chart.props('reference')).toBeUndefined()
+      expect(chart.props('overlay')).toBeUndefined()
+    })
+  })
+
+  describe('on a phone (sm)', () => {
+    it('reads « 130 € / 133 € » in whole euros, a bar of the envelope under it', () => {
+      phone.value = true
+      const row = mountRow()
+      const figure = row.get('[data-testid="budget-figure-Alimentation"]')
+      expect(figure.text().replace(/\s+/g, ' ')).toBe('130 € / 133 €')
+      const bar = row.get('[data-testid="budget-bar-Alimentation"]')
+      expect(bar.attributes('role')).toBe('img')
+      expect(bar.attributes('aria-label')?.replace(/\s+/g, ' ')).toBe(
+        '130 € sur 133 €'
+      )
+      const fill = row.get('[data-testid="budget-bar-fill-Alimentation"]')
+      expect(fill.attributes('style')).toContain('width: 97.')
+      expect(fill.attributes('style')).toContain(DATA_HUE)
+      // No mini-columns on a phone: the chart is a desk's.
+      expect(
+        row.findComponent(MonthsVsBudgetChart).element.parentElement?.className
+      ).toContain('hidden sm:flex')
+    })
+
+    it('fills the bar in amber past the envelope, full', () => {
+      phone.value = true
+      const row = mountRow({
+        actualAverage: 162,
+        budget: 150,
+        rowStatus: 'over',
+      })
+      const fill = row.get('[data-testid="budget-bar-fill-Alimentation"]')
+      expect(fill.attributes('data-tone')).toBe('over')
+      expect(fill.attributes('style')).toContain('width: 100%')
+      expect(fill.attributes('style')).toContain(STATE_COLORS.over)
+      expect(
+        row
+          .get('[data-testid="budget-bar-Alimentation"]')
+          .attributes('aria-label')
+      ).toMatch(/12\s€ au-dessus/)
+    })
+
+    it('marks the envelope to date as a tick on a running month, not a line', () => {
+      phone.value = true
+      const row = mountRow({ proratedBudget: 100 })
+      expect(
+        row.find('[data-testid="budget-prorata-Alimentation"]').exists()
+      ).toBe(false)
+      const tick = row.get('[data-testid="budget-bar-tick-Alimentation"]')
+      expect(tick.attributes('style')).toContain('left: 75.')
+    })
+
+    it('draws no bar without an envelope, nor while editing', () => {
+      phone.value = true
+      expect(
+        mountRow({ budget: 0, savedBudget: 0 })
+          .find('[data-testid="budget-bar-Alimentation"]')
+          .exists()
+      ).toBe(false)
+      expect(
+        mountRow({ editing: true })
+          .find('[data-testid="budget-bar-Alimentation"]')
+          .exists()
+      ).toBe(false)
+    })
+
+    it('stands the field under the name, the whole width, while editing', () => {
+      phone.value = true
+      const row = mountRow({ editing: true })
+      const field = row.get('[data-testid="budget-input-Alimentation"]')
+      const cell = field.element.closest('.row-start-2')
+      expect(cell?.className).toContain('col-span-full')
+      expect(field.classes()).toContain('w-full')
+    })
   })
 })

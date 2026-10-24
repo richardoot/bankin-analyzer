@@ -55,26 +55,48 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-// Mock the filters store
+// Mock the filters store. The reading lives there: reactive, so the page
+// follows a change of it as it follows the real store.
 const filtersState = vi.hoisted(() => ({
   timePeriod: 'all' as string,
   setTimePeriod: vi.fn(),
+  breakdownMode: 'everyday' as 'everyday' | 'real',
+  deductReimbursements: true,
 }))
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    deductPendingReimbursements: false,
-    setDeductPendingReimbursements: vi.fn(),
-    loadFromBackend: vi.fn(),
-    isSyncing: false,
-    get timePeriod() {
-      return filtersState.timePeriod
-    },
-    setTimePeriod: filtersState.setTimePeriod,
-    trendsWindow: 6,
-    setTrendsWindow: vi.fn(),
-    getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
-  }),
-}))
+vi.mock('@/stores/filters', async () => {
+  const { reactive } = await import('vue')
+  const state = reactive(filtersState)
+  return {
+    useFiltersStore: () => ({
+      deductPendingReimbursements: false,
+      setDeductPendingReimbursements: vi.fn(),
+      get breakdownMode() {
+        return state.breakdownMode
+      },
+      setBreakdownMode: (mode: 'everyday' | 'real') => {
+        state.breakdownMode = mode
+      },
+      get deductReimbursements() {
+        return state.deductReimbursements
+      },
+      setDeductReimbursements: (value: boolean) => {
+        state.deductReimbursements = value
+      },
+      loadFromBackend: vi.fn(),
+      isSyncing: false,
+      get timePeriod() {
+        return state.timePeriod
+      },
+      setTimePeriod: filtersState.setTimePeriod,
+      trendsWindow: 6,
+      setTrendsWindow: vi.fn(),
+      getDateRangeFromPeriod: vi.fn(() => ({
+        startDate: null,
+        endDate: null,
+      })),
+    }),
+  }
+})
 
 // Mock the accounts store
 const accountsState = vi.hoisted(() => ({ accounts: [] as { id: string }[] }))
@@ -109,6 +131,8 @@ describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     filtersState.timePeriod = 'all'
+    filtersState.breakdownMode = 'everyday'
+    filtersState.deductReimbursements = true
     accountsState.accounts = []
   })
 

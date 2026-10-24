@@ -1,10 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { DATA_HUE, STATE_BADGE_CLASSES, STATE_COLORS } from './stateTints'
+import {
+  DATA_HUE,
+  STATE_BADGE_CLASSES,
+  STATE_COLORS,
+  deltaTone,
+  gapOf,
+  invertTone,
+} from './stateTints'
 
 /**
- * The dashboard's sources, read as text: the rule of the state tints
- * (agent-os/product/design-system.md) holds in the code, not only in the
- * components a spec happens to mount.
+ * The dashboard's and the budget's sources, read as text: the rule of the
+ * state tints (agent-os/product/design-system.md) holds in the code, not
+ * only in the components a spec happens to mount. Every budget component,
+ * the creation wizard's steps included, and the page; the page's error
+ * goes through InlineAlert, the one place red is written.
  */
 const dashboardSources = import.meta.glob<string>(
   [
@@ -12,6 +21,8 @@ const dashboardSources = import.meta.glob<string>(
     '../views/DashboardPage.vue',
     '../components/charts/IncomeExpensesChart.vue',
     '../components/charts/YearColumnsChart.vue',
+    '../components/budget/**/*.vue',
+    '../views/BudgetPage.vue',
   ],
   { query: '?raw', import: 'default', eager: true }
 )
@@ -29,11 +40,51 @@ describe('the state tints', () => {
     expect(DATA_HUE).toBe('#60a5fa')
   })
 
+  it('reads a gap to a reference in three tones, ±5 % neutral', () => {
+    expect(gapOf(80, 100)).toEqual({ tone: 'under', ratio: -0.2 })
+    expect(gapOf(120, 100)).toEqual({ tone: 'over', ratio: 0.2 })
+    expect(gapOf(104, 100).tone).toBe('neutral')
+    expect(gapOf(96, 100).tone).toBe('neutral')
+    expect(gapOf(105, 100).tone).toBe('neutral')
+    // Nothing to compare with: neutral, no ratio.
+    expect(gapOf(50, 0)).toEqual({ tone: 'neutral', ratio: 0 })
+  })
+
+  it('tones a change of a total: a drop teal, a rise amber, none grey', () => {
+    expect(deltaTone(-30)).toBe('under')
+    expect(deltaTone(30)).toBe('over')
+    expect(deltaTone(0)).toBe('neutral')
+    // Under half a euro, nothing a whole-euro figure would show.
+    expect(deltaTone(0.4)).toBe('neutral')
+  })
+
+  it('flips teal and amber for a figure where more is better', () => {
+    expect(invertTone('under')).toBe('over')
+    expect(invertTone('over')).toBe('under')
+    expect(invertTone('neutral')).toBe('neutral')
+  })
+
   it('reads the dashboard sources it guards', () => {
     expect(Object.keys(dashboardSources)).toEqual(
       expect.arrayContaining([
         '../views/DashboardPage.vue',
         '../components/dashboard/MonthBand.vue',
+        '../components/budget/BudgetMonthBand.vue',
+        '../components/budget/BudgetReviewBand.vue',
+        '../components/budget/BudgetPlanningBand.vue',
+        '../components/budget/BudgetEditBar.vue',
+        '../components/budget/BudgetCategoryRow.vue',
+        '../components/budget/MonthsVsBudgetChart.vue',
+        '../components/budget/BudgetProjectsLine.vue',
+        '../components/budget/BudgetAmortizedLine.vue',
+        '../components/budget/BudgetTableControls.vue',
+        '../components/budget/MonthlyExpensesChart.vue',
+        '../components/budget/BudgetMonthlyMatrix.vue',
+        '../components/budget/BudgetPlanHeader.vue',
+        '../components/budget/BudgetPlansHistoryModal.vue',
+        '../components/budget/SparklineChart.vue',
+        '../components/budget/wizard/PlanStepEnvelopes.vue',
+        '../views/BudgetPage.vue',
       ])
     )
   })

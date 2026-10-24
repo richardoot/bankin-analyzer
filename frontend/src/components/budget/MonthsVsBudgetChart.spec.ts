@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MonthsVsBudgetChart from './MonthsVsBudgetChart.vue'
+import { DATA_HUE, STATE_COLORS } from '@/lib/stateTints'
 
 const months = ['2026-06', '2026-07', '2026-08', '2026-09', '2026-10']
 const values = [120, 150, 90, 140, 60]
@@ -41,22 +42,29 @@ describe('MonthsVsBudgetChart', () => {
     }
   })
 
-  it('paints only the months above the envelope in the state red', () => {
+  it('draws the months in the data hue, those above the envelope in amber', () => {
     const cols = columns(mountChart())
-    const over = cols.map(c => c.attributes('data-over') === 'true')
-    expect(over).toEqual([false, true, false, true, false])
-    for (const [i, col] of cols.entries()) {
-      if (over[i]) {
-        expect(col.classes()).toContain('fill-red-500')
-        expect(col.classes()).toContain('dark:fill-red-400')
-      } else {
-        expect(col.classes()).toContain('fill-gray-500')
-        expect(col.classes()).toContain('dark:fill-slate-400')
-      }
-    }
+    expect(cols.map(c => c.attributes('data-over') === 'true')).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ])
+    expect(cols.map(c => c.attributes('fill'))).toEqual([
+      DATA_HUE,
+      STATE_COLORS.over,
+      DATA_HUE,
+      STATE_COLORS.over,
+      DATA_HUE,
+    ])
+    // No red, no class colour left on a column.
+    expect(cols.map(c => c.attributes('class') ?? '')).toEqual(
+      cols.map(() => '')
+    )
   })
 
-  it('draws the envelope as a dashed line in the text ink, at its height', () => {
+  it('draws the envelope as a dashed ink line, at its height', () => {
     const line = mountChart().find('[data-testid="months-chart-budget"]')
     // 133 on a 0–150 scale of 26 usable pixels: 28 − 133/150 × 26.
     expect(line.attributes()).toMatchObject({
@@ -66,8 +74,8 @@ describe('MonthsVsBudgetChart', () => {
       y2: '4.9',
     })
     expect(line.attributes('stroke-dasharray')).toBeTruthy()
-    expect(line.classes()).toContain('stroke-gray-900')
-    expect(line.classes()).toContain('dark:stroke-gray-100')
+    expect(line.classes()).toContain('stroke-gray-700')
+    expect(line.classes()).toContain('dark:stroke-slate-300')
   })
 
   it('keeps an envelope above every month in view', () => {
@@ -87,16 +95,28 @@ describe('MonthsVsBudgetChart', () => {
     )
     for (const col of columns(wrapper)) {
       expect(col.attributes('data-over')).toBeUndefined()
-      expect(col.classes()).toContain('fill-gray-500')
+      expect(col.attributes('fill')).toBe(DATA_HUE)
     }
   })
 
-  it('draws the running month lighter', () => {
+  it('draws the running month in a lighter blue', () => {
     const cols = columns(mountChart({ runningMonth: '2026-10' }))
-    expect(cols[4]?.attributes('data-running')).toBe('true')
-    expect(cols[4]?.classes()).toContain('opacity-40')
-    expect(cols[3]?.attributes('data-running')).toBeUndefined()
-    expect(cols[3]?.classes()).not.toContain('opacity-40')
+    expect(cols.map(c => c.attributes('data-running'))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'true',
+    ])
+    expect(cols.map(c => c.attributes('fill')).at(-1)).toBe('#93c5fd')
+    expect(cols.map(c => c.attributes('fill')).at(0)).toBe(DATA_HUE)
+  })
+
+  it('keeps a running month above the envelope in amber', () => {
+    const cols = columns(
+      mountChart({ runningMonth: '2026-10', values: [120, 150, 90, 140, 200] })
+    )
+    expect(cols.map(c => c.attributes('fill')).at(-1)).toBe(STATE_COLORS.over)
   })
 
   it('sets the isolated month on a band', () => {

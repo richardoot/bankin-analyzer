@@ -160,3 +160,23 @@ Nouveau `components/budget/BudgetReviewBand.vue`, `lib/budgetMonth.ts`, `lib/bud
 3. **La matrice** : repliée sous la liste (proposé, lot 5) ou supprimée, les lignes portant déjà leurs mois. La supprimer retire `BudgetMonthlyMatrix.vue`, `matrixMonths`, `matrixRows` et leur spec.
 4. **« Couvert »** : réservé à l'édition (proposé, lot 3) ou conservé en suivi.
 5. **« Reste à dépenser »** : l'enveloppe entière moins le dépensé (proposé : c'est ce qu'il reste pour finir le mois), ou l'enveloppe au prorata moins le dépensé (ce qu'on a d'avance ou de retard à ce jour, déjà dit par le badge de Dépensé).
+
+## Remarques du 2026-10-24 après livraison
+
+Cinq remarques de Richard sur la page livrée. Elles priment sur les « Décisions prises » et sur la charte là où elles les contredisent.
+
+1. **L'épargne se calcule sur les revenus réels.** L'épargne prévue (« Ce mois-ci », « Planification », et la ligne « réserve projets X € × N mois ») prend pour revenu la moyenne des revenus des mois complets du plan (`savingsIncomeBase` dans `lib/budgetMonth.ts`). Décision de l'orchestrateur : sans aucun mois complet, on retombe sur les revenus de référence saisis. La tuile dit sa base (« sur les revenus moyens de N mois clos » ou « sur les revenus de référence saisis »). Le champ « Revenus de référence » reste ; le `projectReserve` du backend et la source 5 d'« À faire » lisent toujours les revenus de référence. « Bilan du plan » ne lisait pas les revenus de référence : inchangé.
+2. **« À faire » en bas de la page**, après les enveloppes et leurs lignes repliées ; toujours masqué en édition.
+3. **Le graphique « Dépenses et enveloppe par mois » :**
+   - **en haut**, dans sa propre carte entre la bande et les enveloppes, ouvert sur bureau, replié sous `md` ; la matrice « Mois par mois » reste repliée sous Projets et Achats lissés ;
+   - **la ligne des revenus en vert** (`INCOME_LINE_COLOR`, green-600) : exception à la règle « pas de vert sur une donnée » (design-system § 5.5) ;
+   - **l'enveloppe en ambre pointillé** (décision de l'orchestrateur : c'est le seuil dont le franchissement est déjà dit en ambre) ;
+   - **les événements hachurés** en lecture « Tout » sur les colonnes du plan, comme `IncomeExpensesChart` du tableau de bord ; infobulle « dont événements », pastille hachurée dans la légende ;
+   - **les mois de comparaison en gris, en suivi comme en édition.** Décision de l'orchestrateur : « Comparer avec » est monté une seule fois, dans la carte du graphique, avec une option « Aucune » en tête ; l'état est celui de la page, et sortir de l'édition ne remet plus la comparaison à zéro. Le sélecteur de l'en-tête du tableau disparaît (le doublon aurait émis deux fois la plage et relancé la requête). « Choisir une comparaison » de la Planification déplie la carte et y mène. Un plan d'un seul mois commencé garde la carte pour son sélecteur, le graphique attend deux colonnes.
+
+Ce que ça change aux « Décisions prises » :
+
+- « Deux horloges au lieu de quatre » : la fenêtre de comparaison existe aussi en suivi, **pour le graphique seulement**. La colonne Historique, « Reprendre », « Couvert », la tuile « Marge vs historique » et le tri par historique restent réservés à l'édition (`showHistoricalColumn` = en édition et une comparaison choisie).
+- « Comparer avec apparaît en tête des enveloppes » en édition : il vit sur la carte du graphique.
+- Le graphique n'est plus une ligne repliée sous la liste.
+- La charte : le vert revient sur une ligne de référence (les revenus du graphique du budget), jamais sur un chiffre.

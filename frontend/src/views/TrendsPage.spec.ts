@@ -37,26 +37,50 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
+// The reading lives in the filters store: reactive here, as it is there.
 const filters = vi.hoisted(() => ({
   deductPendingReimbursements: true,
   setDeductPendingReimbursements: vi.fn(),
   lastSyncError: null as string | null,
+  breakdownMode: 'everyday' as 'everyday' | 'real',
+  deductReimbursements: true,
+  setBreakdownMode: vi.fn(),
 }))
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    get deductPendingReimbursements() {
-      return filters.deductPendingReimbursements
-    },
-    setDeductPendingReimbursements: filters.setDeductPendingReimbursements,
-    get lastSyncError() {
-      return filters.lastSyncError
-    },
-    timePeriod: '1y',
-    trendsWindow: 6,
-    setTrendsWindow: vi.fn(),
-    getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
-  }),
-}))
+vi.mock('@/stores/filters', async () => {
+  const { reactive } = await import('vue')
+  const state = reactive(filters)
+  return {
+    useFiltersStore: () => ({
+      get deductPendingReimbursements() {
+        return state.deductPendingReimbursements
+      },
+      setDeductPendingReimbursements: filters.setDeductPendingReimbursements,
+      get breakdownMode() {
+        return state.breakdownMode
+      },
+      setBreakdownMode: (mode: 'everyday' | 'real') => {
+        filters.setBreakdownMode(mode)
+        state.breakdownMode = mode
+      },
+      get deductReimbursements() {
+        return state.deductReimbursements
+      },
+      setDeductReimbursements: (value: boolean) => {
+        state.deductReimbursements = value
+      },
+      get lastSyncError() {
+        return state.lastSyncError
+      },
+      timePeriod: '1y',
+      trendsWindow: 6,
+      setTrendsWindow: vi.fn(),
+      getDateRangeFromPeriod: vi.fn(() => ({
+        startDate: null,
+        endDate: null,
+      })),
+    }),
+  }
+})
 vi.mock('@/stores/accounts', () => ({
   useAccountsStore: () => ({
     accounts: [],
@@ -130,6 +154,8 @@ describe('TrendsPage', () => {
     resetTrendDigestSession()
     filters.deductPendingReimbursements = true
     filters.lastSyncError = null
+    filters.breakdownMode = 'everyday'
+    filters.deductReimbursements = true
     getSpendingTrends.mockResolvedValue(response())
     getTrendDigest.mockResolvedValue(null)
     getCategories.mockResolvedValue([
@@ -198,10 +224,8 @@ describe('TrendsPage', () => {
 
     await wrapper.get('[data-testid="breakdown-mode-real"]').trigger('click')
     await flushPromises()
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      'dashboard-breakdown-mode',
-      'real'
-    )
+    // Kept by the store, the one reading of every page.
+    expect(filters.setBreakdownMode).toHaveBeenCalledWith('real')
     expect(getSpendingTrends).toHaveBeenLastCalledWith(
       expect.objectContaining({ reading: 'real', deductReimbursements: true })
     )
@@ -219,10 +243,8 @@ describe('TrendsPage', () => {
     expect(filters.setDeductPendingReimbursements).toHaveBeenCalledWith(false)
   })
 
-  it('opens on the reading the dashboard left', async () => {
-    vi.mocked(localStorage.getItem).mockImplementation(key =>
-      key === 'dashboard-breakdown-mode' ? 'real' : null
-    )
+  it('opens on the reading the store keeps', async () => {
+    filters.breakdownMode = 'real'
     await mountPage()
 
     expect(getSpendingTrends).toHaveBeenCalledWith(

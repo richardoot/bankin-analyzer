@@ -1,14 +1,22 @@
 <script setup lang="ts">
-  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+  import { computed, useId, watch } from 'vue'
   import type {
     ComparisonPreset,
     ComparisonRange,
   } from '@/composables/useBudgetComparison'
   import type { BudgetPlanDto } from '@/lib/api'
   import { formatMonth } from '@/lib/formatters'
-  import SectionLabel from '@/components/ui/SectionLabel.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
 
+  /**
+   * « Comparer avec »: the past the plan is set against. A segment of its
+   * few choices, mounted by the page on the chart's card, in tracking as in
+   * editing: the chart draws the comparison's months in grey, the history
+   * column of the envelopes waits for edit mode. The resolved range leaves
+   * as `update:range`; the preset and the dates stay with the page.
+   */
   const props = defineProps<{
     plan: BudgetPlanDto | null
     /** True if the "Année dernière" preset has any data (checked once by the parent). */
@@ -142,141 +150,61 @@
   )
 
   /**
-   * The dropdown: a menu button that says whether it is open, closes on
-   * Escape (handing focus back) and on a click outside.
+   * The choices, all visible: none, the months right before the plan, the
+   * same months a year earlier when they hold any data, or two dates.
+   * « Aucune » comes first: the selector sits on the chart's card in
+   * tracking as in editing, and the comparison chosen outlives edit mode
+   * (Richard, 2026-10-24), so it must be possible to take it off.
    */
-  const open = ref(false)
-  const root = ref<HTMLElement | null>(null)
-  const trigger = ref<HTMLButtonElement | null>(null)
-
-  function closeMenu(returnFocus = false): void {
-    if (!open.value) return
-    open.value = false
-    if (returnFocus) trigger.value?.focus()
-  }
-
-  function onDocumentClick(event: MouseEvent): void {
-    if (!open.value) return
-    const target = event.target as Node | null
-    if (target && root.value && !root.value.contains(target)) closeMenu()
-  }
-
-  function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && open.value) {
-      event.stopPropagation()
-      closeMenu(true)
-    }
-  }
-
-  onMounted(() => document.addEventListener('click', onDocumentClick))
-  onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
-
-  /** Options to display in the dropdown. Year-ago is filtered out when unavailable. */
-  const options = computed<{ value: ComparisonPreset; label: string }[]>(() => {
-    const base: { value: ComparisonPreset; label: string }[] = [
-      { value: 'none', label: 'Aucune comparaison' },
-      { value: '3m', label: '3 mois précédents' },
-      { value: '6m', label: '6 mois précédents' },
-      { value: '12m', label: '12 mois précédents' },
+  const options = computed<SegmentedOption<ComparisonPreset>[]>(() => {
+    const base: SegmentedOption<ComparisonPreset>[] = [
+      { value: 'none', label: 'Aucune', title: 'Le plan seul' },
+      { value: '3m', label: '3 mois', title: 'Les 3 mois avant le plan' },
+      { value: '6m', label: '6 mois', title: 'Les 6 mois avant le plan' },
+      { value: '12m', label: '12 mois', title: 'Les 12 mois avant le plan' },
     ]
     if (props.yearAgoAvailable) {
-      base.push({ value: 'year-ago', label: 'Même période, an dernier' })
+      base.push({
+        value: 'year-ago',
+        label: 'Il y a un an',
+        title: 'Les mois du plan, un an plus tôt',
+      })
     }
-    base.push({ value: 'custom', label: 'Personnalisé' })
-    return base
+    base.push({ value: 'custom', label: 'Dates…', title: 'Choisir les dates' })
+    return base.map(option => ({
+      ...option,
+      testId: `comparison-option-${option.value}`,
+    }))
   })
 
-  const currentLabel = computed(() => {
-    const opt = options.value.find(o => o.value === props.preset)
-    if (!opt) return 'Aucune comparaison'
-    if (props.preset === 'none') return opt.label
-    if (resolvedRange.value)
-      return `${opt.label} · ${resolvedRange.value.label}`
-    return opt.label
-  })
+  const labelId = `comparison-label-${useId()}`
 
-  function selectPreset(p: ComparisonPreset) {
-    emit('update:preset', p)
-    closeMenu(true)
+  function selectPreset(preset: ComparisonPreset): void {
+    if (preset === props.preset) return
+    emit('update:preset', preset)
   }
 </script>
 
 <template>
   <div class="space-y-2" data-testid="comparison-selector">
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-      <SectionLabel as="span" class="shrink-0"> Comparer avec </SectionLabel>
-
-      <div
-        ref="root"
-        class="relative w-full min-w-0 sm:w-auto"
-        @keydown="onKeydown"
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span
+        :id="labelId"
+        class="shrink-0 text-xs text-gray-500 dark:text-gray-400"
       >
-        <button
-          ref="trigger"
-          type="button"
-          data-testid="comparison-trigger"
-          aria-haspopup="menu"
-          :aria-expanded="open"
-          aria-controls="comparison-menu"
-          class="inline-flex min-h-[44px] w-full max-w-full items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:hover:bg-slate-700"
-          @click="open = !open"
-        >
-          <span
-            class="inline-block w-2 h-2 rounded-full shrink-0"
-            :class="
-              preset === 'none'
-                ? 'bg-gray-300 dark:bg-slate-600'
-                : 'bg-primary-600'
-            "
-          />
-          <span class="min-w-0 flex-1 truncate text-left">{{
-            currentLabel
-          }}</span>
-          <svg
-            class="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
-            :class="{ 'rotate-180': open }"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
-
-        <div
-          v-if="open"
-          id="comparison-menu"
-          role="menu"
-          aria-label="Période de comparaison"
-          class="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg sm:w-auto sm:min-w-[220px] dark:border-slate-700 dark:bg-slate-900"
-        >
-          <button
-            v-for="opt in options"
-            :key="opt.value"
-            type="button"
-            role="menuitemradio"
-            :aria-checked="preset === opt.value"
-            :data-testid="`comparison-option-${opt.value}`"
-            class="block w-full px-3 py-2.5 text-left text-sm transition-colors sm:py-2"
-            :class="
-              preset === opt.value
-                ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-            "
-            @click="selectPreset(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-      </div>
-
+        Comparer avec
+      </span>
+      <SegmentedControl
+        :model-value="preset"
+        :options="options"
+        size="sm"
+        scrollable
+        :labelled-by="labelId"
+        @update:model-value="selectPreset"
+      />
       <span
         v-if="resolvedRange"
+        data-testid="comparison-range"
         class="hidden text-xs text-gray-500 sm:inline dark:text-gray-400"
       >
         {{ formatMonth(resolvedRange.startDate) }} →
@@ -284,7 +212,7 @@
       </span>
     </div>
 
-    <!-- Custom date inputs -->
+    <!-- The two dates, under the segment, once « Dates… » is chosen. -->
     <div
       v-if="preset === 'custom'"
       class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3"
@@ -335,7 +263,7 @@
       variant="warning"
       data-testid="comparison-custom-inverted"
     >
-      La date de fin est antérieure à la date de début : la comparaison n'est
+      La date de fin est antérieure à la date de début : la comparaison n’est
       pas appliquée.
     </InlineAlert>
   </div>

@@ -86,3 +86,37 @@ describe('DesignReferencePage — the dashboard', () => {
     expect(section.html()).not.toMatch(/\btext-(?:red|green)-\d/)
   })
 })
+
+describe('DesignReferencePage — the budget', () => {
+  it('shows the plan’s bands and folded lines, in the state tints', async () => {
+    const wrapper = await mountPage()
+    const section = wrapper.get('[data-testid="design-budget"]')
+
+    for (const id of [
+      'budget-month-band',
+      'budget-planning-band',
+      'budget-review-band',
+      'budget-projects-line',
+      'budget-amortized-line',
+    ]) {
+      expect(section.find(`[data-testid="${id}"]`).exists(), id).toBe(true)
+    }
+    expect(section.text()).toContain('Les teintes d’état valent pour le budget')
+    expect(section.html()).not.toMatch(/(?:text|bg)-(?:red|green)-\d/)
+  })
+
+  it('lets « Mois lu » read another month', async () => {
+    const wrapper = await mountPage()
+    const band = wrapper.get('[data-testid="budget-month-band"]')
+    await band.get('[data-testid="budget-month-2026-08"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="budget-month-title"]').text()).toBe(
+      'Août'
+    )
+  })
+
+  it('no longer says the plan’s figures are primary', async () => {
+    const wrapper = await mountPage()
+    expect(wrapper.text()).not.toContain('Sur Budget, les chiffres du plan')
+  })
+})

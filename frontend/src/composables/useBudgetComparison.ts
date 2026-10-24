@@ -370,6 +370,27 @@ export function useBudgetComparison({
   }
 
   /**
+   * Whether a category carries an event in any started plan month, whichever
+   * month is read: what decides that the « Vie courante / Tout » choice is
+   * worth offering, the month read being the running one by default.
+   */
+  function hasPlanExceptional(cat: CategoryAverageDto): boolean {
+    if (!cat.everydayMonthlyAmounts) return false
+    return startedPlanIndices.value.some(i => exceptionalAt(cat, i) > 0.005)
+  }
+
+  /**
+   * The events' share of each month of a category, over every month of the
+   * window (`monthLabels`): what the drill-down chart stacks hatched on the
+   * rest of the month in the real reading. Undefined when the backend sent
+   * no split.
+   */
+  function exceptionalSeriesFor(cat: CategoryAverageDto): number[] | undefined {
+    if (!cat.everydayMonthlyAmounts) return undefined
+    return monthLabels.value.map((_, i) => exceptionalAt(cat, i))
+  }
+
+  /**
    * Slices of smoothed purchases in a category's "Réel à date", read
    * « Vie courante » — the « dont X € lissés ». Zero when none touches it.
    */
@@ -501,6 +522,8 @@ export function useBudgetComparison({
     planActualAverage,
     comparisonAverage,
     planActualExceptionalAverage,
+    hasPlanExceptional,
+    exceptionalSeriesFor,
     planActualAmortizedAverage,
     aggregatesFor,
     incomeAggregates,

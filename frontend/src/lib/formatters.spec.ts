@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   formatCurrency,
   formatCompactCurrency,
+  formatEuros,
+  formatSignedEuros,
+  formatSignedPercent,
+  plural,
   formatDate,
   formatDateTime,
   formatMonth,
@@ -63,6 +67,38 @@ describe('formatCompactCurrency', () => {
     expect(spaces(formatCompactCurrency(3450, { compact: true }))).toBe(
       '3,5 k €'
     )
+  })
+})
+
+describe('formatEuros', () => {
+  it('writes whole euros, a negative with the typographic minus', () => {
+    expect(spaces(formatEuros(1234.56))).toBe('1 235 €')
+    expect(spaces(formatEuros(-870))).toBe('−870 €')
+    expect(formatEuros(-870)).not.toContain('-')
+  })
+})
+
+describe('formatSignedEuros', () => {
+  it('signs a change, and says nothing when it rounds to zero', () => {
+    expect(spaces(formatSignedEuros(115))).toBe('+115 €')
+    expect(spaces(formatSignedEuros(-30))).toBe('−30 €')
+    expect(spaces(formatSignedEuros(0.4))).toBe('0 €')
+  })
+})
+
+describe('formatSignedPercent', () => {
+  it('writes a gap with its sign, the minus typographic', () => {
+    expect(spaces(formatSignedPercent(0.16))).toBe('+16 %')
+    expect(spaces(formatSignedPercent(-0.25))).toBe('−25 %')
+    expect(spaces(formatSignedPercent(0))).toBe('0 %')
+  })
+})
+
+describe('plural', () => {
+  it('adds an s past one', () => {
+    expect(plural(1, 'jour')).toBe('jour')
+    expect(plural(0, 'jour')).toBe('jour')
+    expect(plural(3, 'jour')).toBe('jours')
   })
 })
 

@@ -111,7 +111,7 @@ describe('ReadingMenu', () => {
       expect(
         wrapper.get('[data-testid="reading-menu-panel"]').text()
       ).toContain(
-        '« En attente » est une préférence enregistrée, partagée avec le Budget ; « reçus » ne vaut que pour cette lecture.'
+        'Ces réglages valent pour le tableau de bord, les tendances et le budget. « Reçus » est retenu par ce navigateur, « en attente » est enregistré sur votre compte.'
       )
     })
 
@@ -191,6 +191,31 @@ describe('ReadingMenu', () => {
       expect(
         sheet?.querySelector('[data-testid="toggle-deduct-pending"]')
       ).not.toBeNull()
+    })
+  })
+
+  describe('compact, for a header that holds other actions', () => {
+    it('is its icon alone on a phone, the state its accessible name', () => {
+      phone.value = true
+      const wrapper = mountMenu({ compact: true })
+      const label = wrapper.get('[data-testid="reading-menu-label"]')
+      expect(label.classes()).toContain('sr-only')
+      expect(label.text()).toBe(
+        'Lecture : vie courante · remboursements déduits'
+      )
+      expect(button(wrapper).find('svg').exists()).toBe(true)
+    })
+
+    it('keeps its sentence on a desk, and everywhere without compact', () => {
+      const desk = mountMenu({ compact: true })
+      expect(
+        desk.get('[data-testid="reading-menu-label"]').classes()
+      ).not.toContain('sr-only')
+      phone.value = true
+      const plain = mountMenu()
+      expect(
+        plain.get('[data-testid="reading-menu-label"]').classes()
+      ).not.toContain('sr-only')
     })
   })
 })

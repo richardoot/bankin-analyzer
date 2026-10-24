@@ -38,6 +38,44 @@ export function formatCompactCurrency(
     : WHOLE_EUROS.format(value)
 }
 
+/** The typographic minus a figure is written with: « −870 € », not « -870 € ». */
+export const MINUS = '\u2212'
+
+/**
+ * Whole euros, as a band or a badge writes them: « 1 234 € », « −870 € »
+ * with the typographic minus (Intl writes the hyphen).
+ */
+export function formatEuros(value: number): string {
+  return value < 0
+    ? `${MINUS}${WHOLE_EUROS.format(-value)}`
+    : WHOLE_EUROS.format(value)
+}
+
+/**
+ * A change in whole euros, always signed: « +115 € », « −30 € », and
+ * « 0 € » when it rounds to nothing.
+ */
+export function formatSignedEuros(value: number): string {
+  if (Math.round(value) === 0) return WHOLE_EUROS.format(0)
+  return `${value > 0 ? '+' : MINUS}${WHOLE_EUROS.format(Math.abs(value))}`
+}
+
+const SIGNED_PERCENT = new Intl.NumberFormat('fr-FR', {
+  style: 'percent',
+  maximumFractionDigits: 0,
+  signDisplay: 'exceptZero',
+})
+
+/** A gap as a share: « +16 % », « −25 % », « 0 % ». */
+export function formatSignedPercent(ratio: number): string {
+  return SIGNED_PERCENT.format(ratio).replace('-', MINUS)
+}
+
+/** « 1 jour », « 3 jours »: a French plural in -s, from the count. */
+export function plural(count: number, word: string): string {
+  return `${word}${count > 1 ? 's' : ''}`
+}
+
 /**
  * A typed amount, read the way a French user writes it: "12,50", "12.5",
  * "1 234,5" (spaces, including the narrow no-break one `toLocaleString`
