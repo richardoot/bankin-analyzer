@@ -547,7 +547,7 @@ function addToStructure(
 }
 
 function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
-  const r = (v: number) => Math.round(v * 100) / 100
+  const r = (v: number): number => Math.round(v * 100) / 100
   return {
     essential: r(s.essential),
     pleasure: r(s.pleasure),
@@ -1173,7 +1173,7 @@ export class DashboardService {
         leftOutMonths.reduce((sum, m) => sum + (byMonth?.get(m) ?? 0), 0),
     }
 
-    const round = (v: number) => Math.round(v * 100) / 100
+    const round = (v: number): number => Math.round(v * 100) / 100
 
     function buildExpenseCategoryDto(
       categoryId: string,
