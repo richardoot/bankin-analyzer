@@ -74,6 +74,17 @@ function mountPanel(
 /** Normalises the narrow no-break spaces the formatters write. */
 const norm = (text: string) => text.replace(/[\s\u202f\u00a0]+/g, ' ').trim()
 
+/**
+ * The text a width shows: a desk drops what is `sm:hidden`, a phone what is
+ * `hidden` until `sm`. Tailwind's classes are the only switch.
+ */
+function textAt(element: Element, width: 'desk' | 'phone'): string {
+  const clone = element.cloneNode(true) as Element
+  const selector = width === 'desk' ? '.sm\\:hidden' : '.hidden'
+  clone.querySelectorAll(selector).forEach(node => node.remove())
+  return clone.textContent ?? ''
+}
+
 describe('StructurePanel', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -87,12 +98,15 @@ describe('StructurePanel', () => {
   it('says the segment in both readings, and links to all its transactions', () => {
     const wrapper = mountPanel()
 
-    expect(
-      norm(
-        wrapper.get('[data-testid="structure-panel-header-pleasure"]').text()
-      )
-    ).toBe(
+    const header = wrapper.get(
+      '[data-testid="structure-panel-header-pleasure"]'
+    )
+    expect(norm(textAt(header.element, 'desk'))).toBe(
       'Plaisir · 350 € par mois en vie courante · 3 850 € sur 12 mois · 650 € par mois tout compris, événements inclus'
+    )
+    // A phone reads the same four facts in fewer words.
+    expect(norm(textAt(header.element, 'phone'))).toBe(
+      'Plaisir · 350 €/mois en vie courante · 3 850 € sur 12 mois · 650 €/mois avec les événements'
     )
     const link = wrapper.get('[data-testid="structure-panel-link-pleasure"]')
     expect(norm(link.text())).toContain('Toutes les transactions Plaisir')

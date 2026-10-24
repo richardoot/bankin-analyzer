@@ -210,7 +210,7 @@
 <template>
   <div
     :data-testid="`structure-panel-${segment}`"
-    class="rounded-lg bg-gray-50 p-4 text-[13px] text-gray-600 dark:bg-slate-800/50 dark:text-gray-400"
+    class="rounded-lg bg-gray-50 p-3 text-[13px] sm:p-4 text-gray-600 dark:bg-slate-800/50 dark:text-gray-400"
     @keydown.esc.stop="emit('close')"
   >
     <div
@@ -218,7 +218,7 @@
     >
       <p
         :data-testid="`structure-panel-header-${segment}`"
-        class="min-w-0 flex-1 tabular-nums"
+        class="min-w-0 flex-1 tabular-nums max-sm:basis-full"
       >
         <span class="font-semibold text-gray-900 dark:text-gray-100">{{
           label
@@ -227,7 +227,10 @@
         <span class="font-semibold text-gray-900 dark:text-gray-100">{{
           euros(everydayPerMonth)
         }}</span>
-        par mois en vie courante ·
+        <!-- A phone has one line to spare: the same four facts, shorter. -->
+        <span class="hidden sm:inline">&nbsp;par mois en vie courante</span
+        ><span class="sm:hidden">/mois en vie courante</span>
+        ·
         <span class="font-medium text-gray-900 dark:text-gray-100">{{
           euros(total)
         }}</span>
@@ -235,7 +238,9 @@
         <span class="font-medium text-gray-900 dark:text-gray-100">{{
           euros(realPerMonth)
         }}</span>
-        par mois tout compris, événements inclus
+        <span class="hidden sm:inline"
+          >&nbsp;par mois tout compris, événements inclus</span
+        ><span class="sm:hidden">/mois avec les événements</span>
       </p>
       <TransactionsLink
         :to="segmentLink"
