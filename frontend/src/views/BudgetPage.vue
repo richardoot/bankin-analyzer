@@ -19,7 +19,8 @@
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
   import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
-  import { budgetMonthReading } from '@/lib/budgetMonth'
+  import BudgetReviewBand from '@/components/budget/BudgetReviewBand.vue'
+  import { budgetMonthReading, budgetReviewReading } from '@/lib/budgetMonth'
   import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
@@ -630,19 +631,17 @@
   // only reflect the choice.
 
   /**
-   * « Ce mois-ci »: the month read, from the started plan months and each
-   * category's spending in them, in the active reading.
+   * What every reading of the plan is computed from: the started plan
+   * months and each category's spending in them, in the active reading.
    */
-  const monthReading = computed(() => {
+  const readingInput = computed(() => {
     const current = plan.value
     if (!current) return null
     const indices = comparison.startedPlanIndices.value
-    return budgetMonthReading({
+    return {
       plan: current,
       months: comparison.startedPlanMonths.value,
       completeMonthsCount: comparison.completePlanMonthsCount.value,
-      selectedMonth: rowSelectedMonth.value,
-      progress: comparison.selectedMonthProgress.value,
       categories: visibleExpenseCategories.value.map(cat => {
         const series = comparison.seriesFor(cat)
         return {
@@ -657,6 +656,34 @@
           0
         )
       ),
+    }
+  })
+
+  /** « Ce mois-ci »: the month read. */
+  const monthReading = computed(() => {
+    const input = readingInput.value
+    if (!input) return null
+    return budgetMonthReading({
+      ...input,
+      selectedMonth: rowSelectedMonth.value,
+      progress: comparison.selectedMonthProgress.value,
+    })
+  })
+
+  /** The plan is over: the page reads its review (lot 6). */
+  const isPlanFinished = computed(() => planStatus(plan.value) === 'past')
+
+  /**
+   * « Bilan du plan »: a finished plan, read whole (« Le plan », its
+   * default) or one of its months.
+   */
+  const reviewReading = computed(() => {
+    const input = readingInput.value
+    if (!input || !isPlanFinished.value) return null
+    return budgetReviewReading({
+      ...input,
+      selectedMonth: rowSelectedMonth.value,
+      progress: null,
     })
   })
 
@@ -687,24 +714,26 @@
   const budgetTodoItems = computed(() => {
     const current = plan.value
     const status = planStatus(current)
-    if (!current || !status) return []
-    const indices = comparison.startedPlanIndices.value
+    const input = readingInput.value
+    if (!current || !status || !input) return []
     return composeBudgetTodoItems({
       plan: current,
       status,
-      reading: monthReading.value,
+      // A finished plan says the envelopes it spent past on average,
+      // whichever month the band reads.
+      reading:
+        status === 'past'
+          ? budgetMonthReading({
+              ...input,
+              selectedMonth: null,
+              progress: null,
+            })
+          : monthReading.value,
       projects: projects.value,
       categoriesWithoutEnvelope: categoriesWithoutEnvelope({
         plan: current,
-        completeMonthsCount: comparison.completePlanMonthsCount.value,
-        categories: visibleExpenseCategories.value.map(cat => {
-          const series = comparison.seriesFor(cat)
-          return {
-            categoryId: cat.categoryId,
-            categoryName: cat.categoryName,
-            amounts: indices.map(i => series?.[i] ?? 0),
-          }
-        }),
+        completeMonthsCount: input.completeMonthsCount,
+        categories: input.categories,
       }),
       hasCurrentPlan: hasCurrentPlan.value,
       currentMonth: currentYearMonth(),
@@ -1397,8 +1426,24 @@
     <template v-else>
       <!-- « Ce mois-ci » first: holding the month is what the page is
            opened for. « Mois lu » lives in its header and steers the rows. -->
+      <!-- A finished plan reads its review instead: « Bilan du plan »,
+           « Le plan » by default in « Mois lu », or one of its months. -->
+      <BudgetReviewBand
+        v-if="reviewReading"
+        class="mb-6"
+        :reading="reviewReading"
+        :plan-name="plan.name"
+        :plan-start="plan.startDate"
+        :plan-end="plan.endDate"
+        :month-options="monthOptions"
+        :selected-month="rowSelectedMonth"
+        :projects="projects"
+        :project-reserve="plan.projectReserve ?? null"
+        @select-month="selectMonth"
+        @show-envelope="showEnvelope"
+      />
       <BudgetMonthBand
-        v-if="monthReading"
+        v-else-if="monthReading"
         class="mb-6"
         :reading="monthReading"
         :plan-start="plan.startDate"
