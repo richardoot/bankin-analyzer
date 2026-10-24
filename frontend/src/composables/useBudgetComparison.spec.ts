@@ -602,6 +602,20 @@ describe('useBudgetComparison', () => {
       // 120 event only, the new purchase being no event: (0 + 120) / 2.
       expect(api.planActualExceptionalAverage(home)).toBe(60)
       expect(api.planActualAmortizedAverage(home)).toBe(50)
+      // Month by month, for the drill-down chart: the event alone.
+      expect(api.exceptionalSeriesFor(home)).toEqual([0, 120])
+    })
+
+    it('gives the events of each month, none without a split', () => {
+      const real = setup('real')
+      expect(
+        eventStats().expensesByCategory.map(c => real.exceptionalSeriesFor(c))
+      ).toEqual([
+        [0, 120],
+        [0, 0],
+      ])
+      const plain = cat('cat-x', 'X', [100, 100])
+      expect(setup('real').exceptionalSeriesFor(plain)).toBeUndefined()
     })
 
     it('reports no exceptional share when the backend sent no split', () => {

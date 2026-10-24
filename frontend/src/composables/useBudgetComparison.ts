@@ -370,6 +370,17 @@ export function useBudgetComparison({
   }
 
   /**
+   * The events' share of each month of a category, over every month of the
+   * window (`monthLabels`): what the drill-down chart stacks hatched on the
+   * rest of the month in the real reading. Undefined when the backend sent
+   * no split.
+   */
+  function exceptionalSeriesFor(cat: CategoryAverageDto): number[] | undefined {
+    if (!cat.everydayMonthlyAmounts) return undefined
+    return monthLabels.value.map((_, i) => exceptionalAt(cat, i))
+  }
+
+  /**
    * Slices of smoothed purchases in a category's "Réel à date", read
    * « Vie courante » — the « dont X € lissés ». Zero when none touches it.
    */
@@ -501,6 +512,7 @@ export function useBudgetComparison({
     planActualAverage,
     comparisonAverage,
     planActualExceptionalAverage,
+    exceptionalSeriesFor,
     planActualAmortizedAverage,
     aggregatesFor,
     incomeAggregates,
