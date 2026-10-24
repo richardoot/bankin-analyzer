@@ -15,6 +15,8 @@ export interface MonthlyData {
   expenses: number // dépenses brutes (valeur absolue)
   netExpenses: number // dépenses nettes (après déduction des remboursements)
   income: number // somme des revenus
+  /** The events' share of the month's expenses. */
+  exceptionalExpenses: number
   /** netExpenses without the events, smoothed purchases sliced. */
   everydayNetExpenses: number
 }

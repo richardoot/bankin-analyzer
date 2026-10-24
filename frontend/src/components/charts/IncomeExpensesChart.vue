@@ -2,16 +2,17 @@
   /**
    * The period month by month, in one chart (« Où part l'argent »,
    * agent-os/product/dashboard-refonte.md, lot 4): the expenses in
-   * columns — the everyday share solid, the rest hatched on top of it, as
-   * an expanded category row draws its events — the income as a line in
-   * the text's ink, the habit dashed across, the current month lighter:
-   * half a month is not a month.
+   * columns, the income as a line in the text's ink, the habit dashed
+   * across, the current month lighter: half a month is not a month.
    *
-   * Read « Tout », the columns are one series, « Dépenses », solid. A
-   * column opens its month (`select-month`); the screen that listens adds
-   * the keyboard way, a link beside the chart. The legend and the tooltip
-   * are drawn by hand: Apex cannot hatch a legend marker, and a month
-   * without anything outside the everyday says nothing about it.
+   * The events are hatched as an expanded category row hatches them: read
+   * « Tout », the month's events stack hatched on top of the rest, in the
+   * same hue; read « Vie courante », they are out of the figure, so the
+   * columns are one series, solid. A column opens its month
+   * (`select-month`); the screen that listens adds the keyboard way, a
+   * link beside the chart. The legend and the tooltip are drawn by hand:
+   * Apex cannot hatch a legend marker, and a period without an event says
+   * nothing about them.
    */
   import { computed } from 'vue'
   import VueApexCharts from 'vue3-apexcharts/core'
@@ -29,6 +30,8 @@
     label: string
     /** Every expense of the month, netted. */
     netExpenses: number
+    /** The events' share of the month, hatched in the real reading. */
+    exceptionalExpenses: number
     /** The same, the events set aside and smoothed purchases sliced. */
     everydayNetExpenses: number
     income: number
@@ -37,7 +40,7 @@
   const props = withDefaults(
     defineProps<{
       months: IncomeExpensesMonth[]
-      /** « Vie courante » stacks the rest hatched; « Tout » draws one series. */
+      /** « Tout » stacks the events hatched; « Vie courante » draws one series. */
       reading: 'everyday' | 'real'
       /** The habit of the main series, dashed across; null draws nothing. */
       habit: number | null
@@ -71,13 +74,22 @@
 
   const roundCents = (value: number) => Math.round(value * 100) / 100
 
+  /** A month's events, never below zero. */
+  const events = (m: IncomeExpensesMonth) =>
+    Math.max(0, roundCents(m.exceptionalExpenses))
+
   /**
-   * What the everyday leaves out of a month: never below zero — a month a
-   * smoothed purchase's slices reach without the purchase itself would
-   * otherwise hang a column under the axis.
+   * The month under its events: the real total less them, so the stack
+   * adds up to the real total. Never below zero — a netted month under
+   * its gross events would otherwise hang a column under the axis.
    */
-  const outside = (m: IncomeExpensesMonth) =>
-    Math.max(0, roundCents(m.netExpenses - m.everydayNetExpenses))
+  const rest = (m: IncomeExpensesMonth) =>
+    Math.max(0, roundCents(m.netExpenses - events(m)))
+
+  /** The real reading stacks the events only when the period has some. */
+  const hasEvents = computed(
+    () => !isEveryday.value && props.months.some(m => events(m) > 0)
+  )
 
   const hasCurrentMonth = computed(() =>
     props.months.some(m => m.month === thisMonth.value)
@@ -96,7 +108,17 @@
       type: 'line',
       data: props.months.map(m => ({ x: m.label, y: m.income })),
     }
-    if (!isEveryday.value) {
+    if (isEveryday.value) {
+      return [
+        {
+          name: 'Vie courante',
+          type: 'bar',
+          data: props.months.map(m => point(m, m.everydayNetExpenses)),
+        },
+        income,
+      ]
+    }
+    if (!hasEvents.value) {
       return [
         {
           name: 'Dépenses',
@@ -108,14 +130,14 @@
     }
     return [
       {
-        name: 'Vie courante',
+        name: 'Dépenses',
         type: 'bar',
-        data: props.months.map(m => point(m, m.everydayNetExpenses)),
+        data: props.months.map(m => point(m, rest(m))),
       },
       {
-        name: 'Hors vie courante',
+        name: 'événements',
         type: 'bar',
-        data: props.months.map(m => point(m, outside(m))),
+        data: props.months.map(m => point(m, events(m))),
       },
       income,
     ]
@@ -136,7 +158,7 @@
 
   /**
    * A month's tooltip, in Apex's own markup so its theme applies: the
-   * expenses, what the everyday leaves out when there is any, the income.
+   * expenses, the events among them when there are any, the income.
    */
   function tooltip(index: number): string {
     const m = props.months[index]
@@ -150,11 +172,11 @@
     const title =
       m.month === thisMonth.value ? `${m.label} · en cours` : m.label
     const rows = isEveryday.value
-      ? [
-          line('Vie courante', m.everydayNetExpenses),
-          ...(outside(m) > 0 ? [line('Hors vie courante', outside(m))] : []),
+      ? [line('Vie courante', m.everydayNetExpenses)]
+      : [
+          line('Dépenses', m.netExpenses),
+          ...(events(m) > 0 ? [line('dont événements', events(m))] : []),
         ]
-      : [line('Dépenses', m.netExpenses)]
     return (
       `<div class="apexcharts-tooltip-title">${escapeHtml(title)}</div>` +
       rows.join('') +
@@ -192,7 +214,7 @@
   )
 
   const options = computed<ApexOptions>(() => {
-    const bars = isEveryday.value ? 2 : 1
+    const bars = hasEvents.value ? 2 : 1
     const perSeries = <T,>(bar: T, line: T): T[] => [
       ...Array.from({ length: bars }, () => bar),
       line,
@@ -224,7 +246,7 @@
       },
       colors: perSeries(BAR_COLOR, inkColor.value),
       fill: {
-        type: isEveryday.value
+        type: hasEvents.value
           ? ['solid', 'pattern', 'solid']
           : ['solid', 'solid'],
         opacity: 1,
@@ -303,32 +325,22 @@
       data-testid="chart-legend"
       class="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 sm:gap-x-4 sm:text-xs dark:text-gray-400"
     >
-      <template v-if="reading === 'everyday'">
-        <span class="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            class="inline-block h-2.5 w-3 rounded-sm"
-            :style="{ backgroundColor: BAR_COLOR }"
-          />
-          Vie courante
-        </span>
-        <span class="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            data-testid="chart-legend-hatched"
-            class="inline-block h-2.5 w-3 rounded-sm border"
-            :style="hatchedMarker"
-          />
-          Hors vie courante
-        </span>
-      </template>
-      <span v-else class="inline-flex items-center gap-1.5">
+      <span class="inline-flex items-center gap-1.5">
         <span
           aria-hidden="true"
           class="inline-block h-2.5 w-3 rounded-sm"
           :style="{ backgroundColor: BAR_COLOR }"
         />
-        Dépenses
+        {{ reading === 'everyday' ? 'Vie courante' : 'Dépenses' }}
+      </span>
+      <span v-if="hasEvents" class="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          data-testid="chart-legend-hatched"
+          class="inline-block h-2.5 w-3 rounded-sm border"
+          :style="hatchedMarker"
+        />
+        événements
       </span>
       <span class="inline-flex items-center gap-1.5">
         <span

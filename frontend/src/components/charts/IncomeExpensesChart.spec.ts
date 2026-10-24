@@ -18,6 +18,7 @@ const months: IncomeExpensesMonth[] = [
     month: '2026-08',
     label: 'Août 2026',
     netExpenses: 2400,
+    exceptionalExpenses: 500,
     everydayNetExpenses: 1900,
     income: 2500,
   },
@@ -25,6 +26,7 @@ const months: IncomeExpensesMonth[] = [
     month: '2026-09',
     label: 'Sept. 2026',
     netExpenses: 2000,
+    exceptionalExpenses: 0,
     everydayNetExpenses: 2000,
     income: 2600,
   },
@@ -32,6 +34,7 @@ const months: IncomeExpensesMonth[] = [
     month: '2026-10',
     label: 'Oct. 2026',
     netExpenses: 900,
+    exceptionalExpenses: 0,
     everydayNetExpenses: 1000,
     income: 0,
   },
@@ -54,7 +57,7 @@ function mountChart(
   const wrapper = mount(IncomeExpensesChart, {
     props: {
       months,
-      reading: 'everyday',
+      reading: 'real',
       habit: 1950,
       currentMonth: '2026-10',
       ...overrides,
@@ -69,16 +72,16 @@ function mountChart(
 }
 
 describe('IncomeExpensesChart', () => {
-  it('stacks the everyday and the rest, hatched, under the income line', () => {
+  it('stacks the events, hatched, on the rest of each month, under the income line', () => {
     const { series, options, wrapper } = mountChart()
 
     expect(series().map(s => [s.name, s.type])).toEqual([
-      ['Vie courante', 'bar'],
-      ['Hors vie courante', 'bar'],
+      ['Dépenses', 'bar'],
+      ['événements', 'bar'],
       ['Revenus', 'line'],
     ])
-    expect(series()[0]?.data.map(p => p.y)).toEqual([1900, 2000, 1000])
-    // net − everyday, never below zero (October's slices outweigh it).
+    // net − events, so the stack adds up to the month's real total.
+    expect(series()[0]?.data.map(p => p.y)).toEqual([1900, 2000, 900])
     expect(series()[1]?.data.map(p => p.y)).toEqual([500, 0, 0])
     expect(series()[2]?.data.map(p => p.y)).toEqual([2500, 2600, 0])
 
@@ -93,12 +96,13 @@ describe('IncomeExpensesChart', () => {
       true
     )
     expect(wrapper.get('[data-testid="chart-legend"]').text()).toContain(
-      'Hors vie courante'
+      'événements'
     )
   })
 
-  it('reads « Tout » as one solid series of expenses, under the income', () => {
-    const { series, options, wrapper } = mountChart({ reading: 'real' })
+  it('draws one solid series when the period carries no event', () => {
+    const quiet = months.map(m => ({ ...m, exceptionalExpenses: 0 }))
+    const { series, options, wrapper } = mountChart({ months: quiet })
 
     expect(series().map(s => [s.name, s.type])).toEqual([
       ['Dépenses', 'bar'],
@@ -108,6 +112,23 @@ describe('IncomeExpensesChart', () => {
     expect(options().fill?.type).toEqual(['solid', 'solid'])
     expect(wrapper.find('[data-testid="chart-legend-hatched"]').exists()).toBe(
       false
+    )
+  })
+
+  it('reads « Vie courante » as one solid series: the events are out of it', () => {
+    const { series, options, wrapper } = mountChart({ reading: 'everyday' })
+
+    expect(series().map(s => [s.name, s.type])).toEqual([
+      ['Vie courante', 'bar'],
+      ['Revenus', 'line'],
+    ])
+    expect(series()[0]?.data.map(p => p.y)).toEqual([1900, 2000, 1000])
+    expect(options().fill?.type).toEqual(['solid', 'solid'])
+    expect(wrapper.find('[data-testid="chart-legend-hatched"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.get('[data-testid="chart-legend"]').text()).toContain(
+      'Vie courante'
     )
   })
 
@@ -130,10 +151,10 @@ describe('IncomeExpensesChart', () => {
 
   it('draws the current month lighter, the closed ones in the full hue', () => {
     const { series, wrapper } = mountChart()
-    const [everyday, rest] = series()
-    expect(everyday?.data[2]?.fillColor).toMatch(/rgba\(96, 165, 250, 0\.\d+\)/)
-    expect(rest?.data[2]?.fillColor).toBe(everyday?.data[2]?.fillColor)
-    expect(everyday?.data[0]?.fillColor).toBeUndefined()
+    const [rest, events] = series()
+    expect(rest?.data[2]?.fillColor).toMatch(/rgba\(96, 165, 250, 0\.\d+\)/)
+    expect(events?.data[2]?.fillColor).toBe(rest?.data[2]?.fillColor)
+    expect(rest?.data[0]?.fillColor).toBeUndefined()
     expect(wrapper.find('[data-testid="chart-legend-current"]').exists()).toBe(
       true
     )
@@ -155,7 +176,7 @@ describe('IncomeExpensesChart', () => {
     expect(wrapper.emitted('select-month')).toHaveLength(1)
   })
 
-  it('says each month in its tooltip, the rest only when there is some', () => {
+  it('says each month in its tooltip, the events only when there are some', () => {
     const { options } = mountChart()
     const custom = options().tooltip?.custom as (o: {
       dataPointIndex: number
@@ -165,12 +186,20 @@ describe('IncomeExpensesChart', () => {
 
     const august = norm(custom({ dataPointIndex: 0 }))
     expect(august).toContain('Août 2026')
-    expect(august).toContain('Vie courante: 1 900,00 €')
-    expect(august).toContain('Hors vie courante: 500,00 €')
+    expect(august).toContain('Dépenses: 2 400,00 €')
+    expect(august).toContain('dont événements: 500,00 €')
     expect(august).toContain('Revenus: 2 500,00 €')
 
     const september = norm(custom({ dataPointIndex: 1 }))
-    expect(september).not.toContain('Hors vie courante')
+    expect(september).not.toContain('événements')
+
+    const everyday = mountChart({ reading: 'everyday' })
+    const everydayCustom = everyday.options().tooltip?.custom as (o: {
+      dataPointIndex: number
+    }) => string
+    const augustEveryday = norm(everydayCustom({ dataPointIndex: 0 }))
+    expect(augustEveryday).toContain('Vie courante: 1 900,00 €')
+    expect(augustEveryday).not.toContain('événements')
     expect(norm(custom({ dataPointIndex: 2 }))).toContain(
       'Oct. 2026 · en cours'
     )
