@@ -200,6 +200,30 @@ describe('CategoryBreakdownList', () => {
     expect(sparkline?.props('color')).toBe('#6b7280')
   })
 
+  it('reads in two lines on a phone: name and figure, then bar and share, no trend column', () => {
+    const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: { categories, monthLabels, total: 900 },
+    })
+
+    // The trend cell is out below sm: its sparkline waits in the unfolded row.
+    expect(
+      wrapper.get('[data-testid="category-trend-Alimentation"]').classes()
+    ).toEqual(expect.arrayContaining(['hidden', 'sm:flex']))
+    // The bar and its share take the second line.
+    const share = wrapper.get('[data-testid="category-share-Alimentation"]')
+      .element.parentElement as HTMLElement
+    expect(share.className).toContain('col-span-3')
+    expect(share.className).toContain('row-start-2')
+    // A long name wraps on two lines there instead of losing its end.
+    const name = wrapper.get(
+      '[data-testid="category-row-Alimentation"] span.font-medium'
+    )
+    expect(name.classes()).toEqual(
+      expect.arrayContaining(['line-clamp-2', 'sm:truncate'])
+    )
+  })
+
   it('shows the amount alone, with no trend column, over a single month', () => {
     const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },

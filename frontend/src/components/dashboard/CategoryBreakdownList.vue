@@ -475,7 +475,7 @@
                the link to its transactions — never inside the toggle, a
                link in a button is two gestures in one. -->
           <div
-            class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1.5 px-2 py-2.5 transition-colors hover:bg-gray-50 sm:col-span-full sm:grid-cols-subgrid sm:gap-x-4 sm:gap-y-0 dark:hover:bg-slate-800/60"
+            class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 px-2 py-2 transition-colors sm:py-2.5 hover:bg-gray-50 sm:col-span-full sm:grid-cols-subgrid sm:gap-x-4 sm:gap-y-0 dark:hover:bg-slate-800/60"
           >
             <button
               type="button"
@@ -492,7 +492,7 @@
                 cat.icon
               }}</span>
               <span
-                class="min-w-0 truncate font-medium text-gray-900 dark:text-gray-100"
+                class="line-clamp-2 min-w-0 font-medium break-words text-gray-900 sm:line-clamp-none sm:truncate dark:text-gray-100"
               >
                 {{ cat.category }}
               </span>
