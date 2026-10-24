@@ -481,10 +481,12 @@
 
   /**
    * True when at least one visible category carries exceptional spending in
-   * the elapsed plan months — drives whether the mode selector is offered.
+   * a started plan month — drives whether the mode selector is offered. Not
+   * the month read: the running month without an event must not hide a
+   * choice the shared preference may hold on « Tout ».
    */
   const hasExceptionalInPlan = computed(() =>
-    visibleExpenseCategories.value.some(c => getExceptionalAverage(c) > 0.005)
+    visibleExpenseCategories.value.some(c => comparison.hasPlanExceptional(c))
   )
 
   /**
@@ -651,9 +653,21 @@
     }
   })
 
+  /**
+   * What the band of the month reads: none while a started plan has no
+   * figures (a failed statistics load) — without them it would say « Le plan
+   * commence le … » of a plan already running. The error alert speaks alone.
+   */
+  const bandInput = computed(() => {
+    const input = readingInput.value
+    if (!input) return null
+    if (!statistics.value && planStatus(input.plan) !== 'future') return null
+    return input
+  })
+
   /** « Ce mois-ci »: the month read. */
   const monthReading = computed(() => {
-    const input = readingInput.value
+    const input = bandInput.value
     if (!input) return null
     return budgetMonthReading({
       ...input,
@@ -670,7 +684,7 @@
    * default) or one of its months.
    */
   const reviewReading = computed(() => {
-    const input = readingInput.value
+    const input = bandInput.value
     if (!input || !isPlanFinished.value) return null
     return budgetReviewReading({
       ...input,
@@ -1686,6 +1700,7 @@
                 :plan-end-month="chartRanges.planEndMonth"
                 :comparison-start-month="chartRanges.comparisonStartMonth"
                 :comparison-end-month="chartRanges.comparisonEndMonth"
+                :current-month="currentYearMonth()"
                 @select-month="openMonthTransactions"
               />
             </div>

@@ -1786,6 +1786,19 @@ describe('BudgetPage', () => {
         wrapper.unmount()
       })
 
+      it('hands the chart the page’s month, read in UTC like the plan', async () => {
+        // The last half hour of August in UTC: already September in Paris.
+        vi.setSystemTime(new Date('2026-08-31T23:30:00Z'))
+        const wrapper = mount(BudgetPage)
+        await flushPromises()
+
+        expect(
+          wrapper.findComponent({ name: 'MonthlyExpensesChart' }).props()
+            .currentMonth
+        ).toBe('2026-08')
+        wrapper.unmount()
+      })
+
       it('hands the chart the comparison only while editing', async () => {
         const wrapper = mount(BudgetPage)
         await flushPromises()
@@ -1905,6 +1918,56 @@ describe('BudgetPage', () => {
       )
       expect(june.text()).toMatch(/180/)
       expect(june.text()).not.toMatch(/500/)
+      wrapper.unmount()
+    })
+
+    it('leaves the error alone when a running plan’s figures fail to load', async () => {
+      vi.mocked(api.getBudgetStatistics).mockRejectedValue(new Error('boom'))
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="budget-error"]').text()).toContain(
+        'boom'
+      )
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.text()).not.toContain('Le plan commence le')
+      wrapper.unmount()
+    })
+
+    it('keeps the choice of reading when the month read has no event but another plan month has', async () => {
+      // Read on 20 August, the running month by default: the event was June’s.
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+            everydayMonthlyAmounts: [180, 200, 200, 0, 0, 0, 0],
+          },
+        ],
+        incomeByCategory: [],
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.get('[data-testid="budget-month-title"]').text()
+      ).toContain('Ce mois-ci')
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="breakdown-mode-real"]').exists()).toBe(
+        true
+      )
       wrapper.unmount()
     })
 
