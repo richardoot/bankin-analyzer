@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import BudgetMonthlyMatrix from './BudgetMonthlyMatrix.vue'
+import { STATE_BADGE_CLASSES } from '@/lib/stateTints'
 
 // Every cell links to the Transactions page: RouterLink needs a router.
 const router = createRouter({
@@ -57,33 +58,47 @@ describe('BudgetMonthlyMatrix', () => {
     ).toContain('200')
   })
 
-  it('flags only the months that went past the envelope', () => {
+  const cellClasses = (wrapper: ReturnType<typeof mountMatrix>, id: string) =>
+    wrapper.get(`[data-testid="${id}"]`).classes().join(' ')
+
+  it('flags only the months that went past the envelope, in the over tint', () => {
     const wrapper = mountMatrix()
 
     // 500 over an envelope of 300.
-    expect(
-      wrapper
-        .find('[data-testid="matrix-cell-Alimentation-2026-06"]')
-        .classes()
-        .join(' ')
-    ).toContain('bg-red-50')
-    // 200 under it — the same category, a different month.
-    expect(
-      wrapper
-        .find('[data-testid="matrix-cell-Alimentation-2026-07"]')
-        .classes()
-        .join(' ')
-    ).not.toContain('bg-red-50')
+    const over = cellClasses(wrapper, 'matrix-cell-Alimentation-2026-06')
+    for (const cls of STATE_BADGE_CLASSES.over.split(' ')) {
+      expect(over).toContain(cls)
+    }
+    // 200 under it — the same category, a different month: ink, no tint.
+    const under = cellClasses(wrapper, 'matrix-cell-Alimentation-2026-07')
+    expect(under).not.toContain('bg-amber-50')
+    expect(under).toContain('text-gray-900')
+  })
+
+  it('never paints a cell red or green', () => {
+    const wrapper = mountMatrix()
+    expect(wrapper.html()).not.toMatch(/\b(?:text|bg)-(?:red|green)-\d/)
   })
 
   it('stays neutral where nothing was promised', () => {
     const wrapper = mountMatrix()
 
     const cell = wrapper.find('[data-testid="matrix-cell-Divers-2026-06"]')
-    const classes = cell.classes().join(' ')
-    expect(classes).not.toContain('bg-red-50')
-    expect(classes).not.toContain('bg-green-50')
+    expect(cell.classes().join(' ')).not.toContain('bg-amber-50')
     expect(cell.attributes('title')).toContain("pas d'enveloppe")
+  })
+
+  it('writes the envelopes and their total in ink', () => {
+    const wrapper = mountMatrix()
+
+    for (const id of ['matrix-budget-Alimentation', 'matrix-budget-total']) {
+      const classes = cellClasses(wrapper, id)
+      expect(classes).toContain('text-gray-900')
+      expect(classes).not.toContain('text-primary')
+    }
+    expect(wrapper.get('[data-testid="matrix-budget-total"]').text()).toContain(
+      '300'
+    )
   })
 
   it('totals each month against the total envelope', () => {
@@ -92,12 +107,13 @@ describe('BudgetMonthlyMatrix', () => {
     // June: 500 + 40 = 540 against 300 of envelopes.
     const june = wrapper.find('[data-testid="matrix-total-2026-06"]')
     expect(june.text()).toContain('540')
-    expect(june.classes().join(' ')).toContain('text-red-600')
+    expect(june.classes().join(' ')).toContain('bg-amber-50')
 
     // July: 200 + 40 = 240, inside.
     const july = wrapper.find('[data-testid="matrix-total-2026-07"]')
     expect(july.text()).toContain('240')
-    expect(july.classes().join(' ')).not.toContain('text-red-600')
+    expect(july.classes().join(' ')).not.toContain('bg-amber-50')
+    expect(july.classes().join(' ')).toContain('text-gray-900')
   })
 
   it('marks the column the page is currently reading, without a button', () => {
@@ -114,33 +130,13 @@ describe('BudgetMonthlyMatrix', () => {
     ).toBeUndefined()
   })
 
-  it('starts open on a desk and folded on a phone', () => {
-    const open = mountMatrix()
+  it('leaves the folding to the page: no toggle of its own', () => {
+    const wrapper = mountMatrix()
+    expect(wrapper.find('[data-testid="matrix-toggle"]').exists()).toBe(false)
+    expect(wrapper.find('button').exists()).toBe(false)
     expect(
-      open.find('[data-testid="matrix-toggle"]').attributes('aria-expanded')
-    ).toBe('true')
-    expect(open.find('[data-testid="matrix-body"]').attributes('style')).toBe(
-      undefined
-    )
-
-    const original = window.matchMedia
-    window.matchMedia = ((query: string) => ({
-      matches: query.includes('max-width'),
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    })) as unknown as typeof window.matchMedia
-    try {
-      const folded = mountMatrix()
-      expect(
-        folded.find('[data-testid="matrix-body"]').attributes('style')
-      ).toContain('display: none')
-      expect(
-        folded.find('[data-testid="matrix-toggle"]').attributes('aria-expanded')
-      ).toBe('false')
-    } finally {
-      window.matchMedia = original
-    }
+      wrapper.find('[data-testid="matrix-body"]').attributes('style')
+    ).toBeUndefined()
   })
 
   it('opens the rows behind a cell, and behind a month total, gross', () => {

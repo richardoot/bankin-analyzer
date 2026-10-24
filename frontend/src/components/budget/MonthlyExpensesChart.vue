@@ -1,4 +1,14 @@
 <script setup lang="ts">
+  /**
+   * « Dépenses et enveloppe par mois » (agent-os/product/budget-refonte.md,
+   * lot 5), drawn to the dashboard's chart (`IncomeExpensesChart`): the
+   * plan's started months in columns of the one data hue, the current
+   * month lighter, the comparison's months in light grey — and only while
+   * the envelopes are edited, the page passing no comparison otherwise.
+   * The total envelope dashed and the income solid, both in the text's
+   * ink. The legend names only what is drawn; the tooltip says the gap to
+   * the envelope in words, without a colour.
+   */
   import { computed } from 'vue'
   import VueApexCharts from 'vue3-apexcharts/core'
   import '@/lib/apexcharts-features'
@@ -10,26 +20,28 @@
     formatMonth,
   } from '@/lib/formatters'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import { DATA_HUE } from '@/lib/stateTints'
+  import { budgetChartMonths, thisYearMonth } from '@/lib/budgetChartMonths'
 
   const props = defineProps<{
-    /** Total expenses per month (chronological) */
+    /** Total expenses per month, aligned with `monthLabels`. */
     monthlyTotals: number[]
     /** Month labels like ['2025-04', '2025-05', ...] */
     monthLabels: string[]
-    /** Average monthly income — shown as a reference line */
+    /** Average monthly income — the solid ink line. */
     averageIncome: number
-    /** Total budget — shown as a reference line */
+    /** Total envelope — the dashed ink line. */
     totalBudget: number
-    /** First month covered by the budget plan (YYYY-MM). When set, months
-     *  inside the plan range are highlighted in a different color than the
-     *  comparison ("before") months. */
-    planStartMonth?: string
+    /** First month covered by the budget plan (YYYY-MM). */
+    planStartMonth?: string | undefined
     /** Last month covered by the budget plan (YYYY-MM). */
-    planEndMonth?: string
-    /** First month of the comparison range (YYYY-MM). Optional. */
-    comparisonStartMonth?: string
-    /** Last month of the comparison range (YYYY-MM). Optional. */
-    comparisonEndMonth?: string
+    planEndMonth?: string | undefined
+    /** First month of the comparison range (YYYY-MM), editing only. */
+    comparisonStartMonth?: string | undefined
+    /** Last month of the comparison range (YYYY-MM), editing only. */
+    comparisonEndMonth?: string | undefined
+    /** The month still running, drawn lighter. Defaults to today's. */
+    currentMonth?: string | undefined
   }>()
 
   const emit = defineEmits<{
@@ -37,152 +49,167 @@
     (e: 'select-month', yearMonth: string): void
   }>()
 
-  const { isDark, labelColor, chartTheme } = useChartTheme()
+  const { isDark, labelColor, chartTheme, chartAnimations, donutValueColor } =
+    useChartTheme()
   const isMobile = useIsMobile()
+
+  /** The one data hue of the page, the share bars' blue-400. */
+  const BAR_COLOR = DATA_HUE
+  /** The same blue, lighter: the current month, half a month. */
+  const BAR_COLOR_CURRENT = 'rgba(96, 165, 250, 0.4)'
+  /** The comparison's months: light grey, the past it is set against. */
+  const COMPARISON_LIGHT = '#d1d5db' // gray-300
+  const COMPARISON_DARK = '#475569' // slate-600
+
+  const thisMonth = computed(() => props.currentMonth ?? thisYearMonth())
+
+  const months = computed(() =>
+    budgetChartMonths(props.monthLabels, {
+      planStartMonth: props.planStartMonth,
+      planEndMonth: props.planEndMonth,
+      comparisonStartMonth: props.comparisonStartMonth,
+      comparisonEndMonth: props.comparisonEndMonth,
+      currentMonth: thisMonth.value,
+    })
+  )
+
+  const totals = computed(() =>
+    months.value.map(m => props.monthlyTotals[m.index] ?? 0)
+  )
+
+  const displayLabels = computed(() =>
+    months.value.map(m => formatMonth(m.ym, { year: false }))
+  )
+
+  const hasComparison = computed(() =>
+    months.value.some(m => m.kind === 'comparison')
+  )
+  const hasCurrentMonth = computed(() =>
+    months.value.some(m => m.ym === thisMonth.value)
+  )
+
+  const comparisonColor = computed(() =>
+    isDark.value ? COMPARISON_DARK : COMPARISON_LIGHT
+  )
+
+  const barColors = computed(() =>
+    months.value.map(m => {
+      if (m.kind === 'comparison') return comparisonColor.value
+      return m.ym === thisMonth.value ? BAR_COLOR_CURRENT : BAR_COLOR
+    })
+  )
+
+  const inkColor = computed(() => donutValueColor.value)
 
   // On a ~340px plot the full « Revenus 3 456,78 € » labels overlapped the
   // bars and each other; a phone gets « Rev. 3,5 k€ » on the left.
   const compact = (n: number): string =>
     formatCompactCurrency(n, { compact: true })
 
-  function getCurrentYearMonth(): string {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  }
+  type YAnnotation = NonNullable<
+    NonNullable<ApexOptions['annotations']>['yaxis']
+  >[number]
 
-  const currentYearMonth = getCurrentYearMonth()
-
-  // Build display labels and detect current month index
-  const displayLabels = computed(() =>
-    props.monthLabels.map(ym => formatMonth(ym, { year: false }))
-  )
-
-  const currentMonthIndex = computed(() =>
-    props.monthLabels.indexOf(currentYearMonth)
-  )
-
-  /** Whether the chart is annotated against a budget plan range. */
-  const hasPlanRange = computed(
-    () => !!props.planStartMonth && !!props.planEndMonth
-  )
-  const hasComparisonRange = computed(
-    () => !!props.comparisonStartMonth && !!props.comparisonEndMonth
-  )
-
-  function isPlanMonth(ym: string): boolean {
-    if (!props.planStartMonth || !props.planEndMonth) return false
-    return ym >= props.planStartMonth && ym <= props.planEndMonth
-  }
-
-  function isComparisonMonth(ym: string): boolean {
-    if (!props.comparisonStartMonth || !props.comparisonEndMonth) return false
-    return ym >= props.comparisonStartMonth && ym <= props.comparisonEndMonth
-  }
-
-  // Bar colors:
-  //  - Current calendar month → amber (always wins, signals "where we are")
-  //  - Inside the plan range  → red (the months covered by the budget)
-  //  - Inside the comparison  → indigo (the reference period)
-  //  - Anywhere else (gap)    → gray
-  //  - No plan range provided → original behaviour (gray for everything,
-  //    amber accent on the current month)
-  const COMPARISON_LIGHT = '#9ca3af' // gray-400
-  const COMPARISON_DARK = '#64748b' // slate-500
-  const PLAN_COLOR = '#ef4444' // red-500
-  const COMP_COLOR = '#6366f1' // indigo-500
-  const CURRENT_COLOR = '#f59e0b' // amber-500
-  // The two dashed lines: income in the income green, the budget in the
-  // primary the plan's column and figures already wear — indigo is the
-  // comparison's, and a budget line in indigo read as history.
-  const INCOME_COLOR = '#22c55e' // green-500
-  const BUDGET_COLOR = '#059669' // primary-600
-
-  function colorForMonth(ym: string): string {
-    if (ym === currentYearMonth) return CURRENT_COLOR
-    if (hasPlanRange.value && isPlanMonth(ym)) return PLAN_COLOR
-    if (hasComparisonRange.value && isComparisonMonth(ym)) return COMP_COLOR
-    return isDark.value ? COMPARISON_DARK : COMPARISON_LIGHT
-  }
-
-  const barColors = computed(() => props.monthLabels.map(colorForMonth))
-
-  // Annotations: horizontal lines for income and budget
-  const yAnnotations = computed(() => {
-    const annotations: NonNullable<
-      NonNullable<ApexOptions['annotations']>['yaxis']
-    > = []
-    if (props.averageIncome > 0) {
-      annotations.push({
-        y: props.averageIncome,
-        borderColor: INCOME_COLOR,
-        strokeDashArray: 4,
-        label: {
-          text: isMobile.value
-            ? `Rev. ${compact(props.averageIncome)}`
-            : `Revenus ${formatCurrency(props.averageIncome)}`,
-          position: isMobile.value ? 'left' : 'right',
-          textAnchor: isMobile.value ? 'start' : 'end',
-          borderColor: 'transparent',
-          style: {
-            color: INCOME_COLOR,
-            background: 'transparent',
-            fontSize: '11px',
-            fontWeight: '500',
-            padding: { left: 4, right: 4, top: 2, bottom: 2 },
-          },
-        },
-      })
-    }
-    if (props.totalBudget > 0) {
-      annotations.push({
-        y: props.totalBudget,
-        borderColor: BUDGET_COLOR,
-        strokeDashArray: 4,
-        label: {
-          text: isMobile.value
-            ? `Budget ${compact(props.totalBudget)}`
-            : `Budget ${formatCurrency(props.totalBudget)}`,
-          position: isMobile.value ? 'left' : 'right',
-          textAnchor: isMobile.value ? 'start' : 'end',
-          borderColor: 'transparent',
-          style: {
-            color: BUDGET_COLOR,
-            background: 'transparent',
-            fontSize: '11px',
-            fontWeight: '500',
-            padding: { left: 4, right: 4, top: 2, bottom: 2 },
-          },
-        },
-      })
-    }
-    return annotations
-  })
-
-  // Point annotation for current month
-  const xAnnotations = computed(() => {
-    if (currentMonthIndex.value < 0) return []
-    const label = displayLabels.value[currentMonthIndex.value]
-    if (!label) return []
-    return [
-      {
-        x: label,
-        borderColor: '#f59e0b',
-        strokeDashArray: 3,
-        label: {
-          text: 'En cours',
-          orientation: 'horizontal' as const,
-          borderColor: '#f59e0b',
-          style: {
-            color: '#0f172a',
-            background: '#f59e0b',
-            fontSize: '10px',
-            fontWeight: '600',
-            padding: { left: 6, right: 6, top: 2, bottom: 2 },
-          },
+  function referenceLine(
+    y: number,
+    text: string,
+    dashed: boolean
+  ): YAnnotation {
+    return {
+      y,
+      borderColor: inkColor.value,
+      strokeDashArray: dashed ? 4 : 0,
+      label: {
+        text,
+        position: isMobile.value ? 'left' : 'right',
+        textAnchor: isMobile.value ? 'start' : 'end',
+        borderColor: 'transparent',
+        style: {
+          color: inkColor.value,
+          background: 'transparent',
+          fontSize: '11px',
+          fontWeight: '500',
+          padding: { left: 4, right: 4, top: 2, bottom: 2 },
         },
       },
-    ]
+    }
+  }
+
+  /** The two references: the envelope dashed, the income solid. */
+  const yAnnotations = computed(() => {
+    const lines: YAnnotation[] = []
+    if (props.averageIncome > 0) {
+      lines.push(
+        referenceLine(
+          props.averageIncome,
+          isMobile.value
+            ? `Rev. ${compact(props.averageIncome)}`
+            : `Revenus ${formatCurrency(props.averageIncome)}`,
+          false
+        )
+      )
+    }
+    if (props.totalBudget > 0) {
+      lines.push(
+        referenceLine(
+          props.totalBudget,
+          isMobile.value
+            ? `Env. ${compact(props.totalBudget)}`
+            : `Enveloppe ${formatCurrency(props.totalBudget)}`,
+          true
+        )
+      )
+    }
+    return lines
   })
+
+  function escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
+
+  /** The gap to the envelope, in words. */
+  function envelopeGap(value: number): string | null {
+    if (props.totalBudget <= 0) return null
+    const gap = value - props.totalBudget
+    if (Math.abs(gap) < 0.005) return 'pile l’enveloppe'
+    return gap > 0
+      ? `${formatCurrency(gap)} au-dessus de l’enveloppe`
+      : `${formatCurrency(-gap)} sous l’enveloppe`
+  }
+
+  /** A month's tooltip, in Apex's own markup so its theme applies. */
+  function tooltip(index: number): string {
+    const m = months.value[index]
+    if (!m) return ''
+    const value = totals.value[index] ?? 0
+    const line = (label: string, text: string) =>
+      `<div class="apexcharts-tooltip-series-group apexcharts-active" style="display:flex">` +
+      `<div class="apexcharts-tooltip-text"><div class="apexcharts-tooltip-y-group">` +
+      `<span class="apexcharts-tooltip-text-y-label">${escapeHtml(label)} : </span>` +
+      `<span class="apexcharts-tooltip-text-y-value">${escapeHtml(text)}</span>` +
+      `</div></div></div>`
+    const name = formatMonth(m.ym, { style: 'long' })
+    const title =
+      m.ym === thisMonth.value
+        ? `${name} · en cours`
+        : m.kind === 'comparison'
+          ? `${name} · comparaison`
+          : name
+    const rows = [line('Dépenses', formatCurrency(value))]
+    const gap = envelopeGap(value)
+    if (gap) rows.push(line('Enveloppe', gap))
+    if (props.averageIncome > 0) {
+      rows.push(line('Épargne', formatCurrency(props.averageIncome - value)))
+    }
+    return (
+      `<div class="apexcharts-tooltip-title">${escapeHtml(title)}</div>` +
+      rows.join('')
+    )
+  }
 
   const chartOptions = computed<ApexOptions>(() => ({
     chart: {
@@ -190,6 +217,7 @@
       toolbar: { show: false },
       fontFamily: 'inherit',
       background: 'transparent',
+      animations: chartAnimations.value,
       events: {
         // Reading a bar and then hunting for the same month in a selector is
         // one step too many: the bar IS the month.
@@ -201,16 +229,17 @@
           const ym =
             config === undefined
               ? undefined
-              : props.monthLabels[config.dataPointIndex]
+              : months.value[config.dataPointIndex]?.ym
           if (ym) emit('select-month', ym)
         },
       },
     },
     plotOptions: {
       bar: {
-        borderRadius: 3,
-        // Wider bars on a phone: each one is the month selector.
-        columnWidth: isMobile.value ? '75%' : '55%',
+        borderRadius: 4,
+        borderRadiusApplication: 'end',
+        // Wider bars on a phone: each one opens its month.
+        columnWidth: isMobile.value ? '75%' : '60%',
         distributed: true,
       },
     },
@@ -223,30 +252,20 @@
         rotateAlways: isMobile.value,
         hideOverlappingLabels: true,
         style: {
-          colors: props.monthLabels.map(ym => {
-            if (ym === currentYearMonth) return CURRENT_COLOR
-            if (hasPlanRange.value && isPlanMonth(ym)) return PLAN_COLOR
-            if (hasComparisonRange.value && isComparisonMonth(ym))
-              return COMP_COLOR
-            return labelColor.value
-          }),
-          fontSize: '11px',
-          // A single weight: ApexCharts types `fontWeight` as one value, and
-          // only `colors` takes an array. The per-month array that used to sit
-          // here could not have been applied — the emphasis it was reaching for
-          // is already carried by the colours just above.
-          fontWeight: '400',
+          colors: labelColor.value,
+          fontSize: isMobile.value ? '11px' : '12px',
         },
       },
       axisBorder: { show: false },
       axisTicks: { show: false },
     },
     yaxis: {
+      min: 0,
       ...(isMobile.value ? { tickAmount: 4 } : {}),
       labels: {
         style: {
           colors: labelColor.value,
-          fontSize: '11px',
+          fontSize: isMobile.value ? '11px' : '12px',
         },
         formatter: (value: number) =>
           isMobile.value ? compact(value) : formatCompactCurrency(value),
@@ -257,112 +276,74 @@
       strokeDashArray: 4,
     },
     colors: barColors.value,
-    annotations: {
-      yaxis: yAnnotations.value,
-      xaxis: xAnnotations.value,
-    },
+    annotations: { yaxis: yAnnotations.value },
     tooltip: {
       theme: isDark.value ? 'dark' : 'light',
-      custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
-        const val = props.monthlyTotals[dataPointIndex] ?? 0
-        const ym = props.monthLabels[dataPointIndex] ?? ''
-        const isCurrent = ym === currentYearMonth
-        const isPlan = hasPlanRange.value && isPlanMonth(ym)
-        const isComp = hasComparisonRange.value && isComparisonMonth(ym)
-        // The tooltip follows the theme: a 400 reads on its dark panel, a
-        // 700 on the light one.
-        const tipGreen = isDark.value ? '#4ade80' : '#15803d'
-        const tipRed = isDark.value ? '#f87171' : '#b91c1c'
-
-        const fullLabel = formatMonth(ym, { style: 'long' })
-
-        const diffBudget =
-          props.totalBudget > 0 ? val - props.totalBudget : null
-        const epargne =
-          props.averageIncome > 0 ? props.averageIncome - val : null
-
-        let html = `<div style="padding:8px 12px;font-size:12px;line-height:1.6">`
-        html += `<div style="font-weight:600;margin-bottom:2px">${fullLabel}`
-        if (isCurrent)
-          html += ` <span style="color:#f59e0b;font-weight:400">(en cours)</span>`
-        else if (isPlan)
-          html += ` <span style="color:#ef4444;font-weight:400">(plan)</span>`
-        else if (isComp)
-          html += ` <span style="color:#6366f1;font-weight:400">(comparaison)</span>`
-        else if (hasPlanRange.value && hasComparisonRange.value)
-          html += ` <span style="opacity:0.5;font-weight:400">(intermédiaire)</span>`
-        html += `</div>`
-        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Dépenses</span><strong>${formatCurrency(val)}</strong></div>`
-        if (diffBudget !== null) {
-          const color = diffBudget > 0 ? tipRed : tipGreen
-          html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">vs Budget</span><span style="color:${color};font-weight:600">${diffBudget > 0 ? '+' : ''}${formatCurrency(diffBudget)}</span></div>`
-        }
-        if (epargne !== null) {
-          const color = epargne >= 0 ? tipGreen : tipRed
-          html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Épargne</span><span style="color:${color};font-weight:600">${formatCurrency(epargne)}</span></div>`
-        }
-        html += `</div>`
-        return html
-      },
+      custom: ({ dataPointIndex }: { dataPointIndex: number }) =>
+        tooltip(dataPointIndex),
     },
   }))
 
-  const series = computed(() => [
-    {
-      name: 'Dépenses',
-      data: props.monthlyTotals,
-    },
-  ])
+  const series = computed(() => [{ name: 'Dépenses', data: totals.value }])
 </script>
 
 <template>
-  <div v-if="monthlyTotals.length >= 2" class="w-full">
-    <!-- Legend -->
+  <div
+    v-if="months.length >= 2"
+    class="w-full [&_.apexcharts-bar-area]:cursor-pointer"
+    data-testid="monthly-expenses-chart"
+  >
     <div
-      class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 mb-1"
+      data-testid="chart-legend"
+      class="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 sm:gap-x-4 sm:text-xs dark:text-gray-400"
     >
-      <span v-if="hasPlanRange" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-2 rounded-sm bg-red-500"></span>
-        Plan budgétaire
-      </span>
-      <span v-if="hasComparisonRange" class="flex items-center gap-1.5">
-        <!-- Same hue as COMP_COLOR, the bars it names. -->
+      <span class="inline-flex items-center gap-1.5">
         <span
-          class="inline-block w-3 h-2 rounded-sm bg-indigo-500"
+          aria-hidden="true"
+          class="inline-block h-2.5 w-3 rounded-sm"
+          data-testid="legend-plan-swatch"
+          :style="{ backgroundColor: BAR_COLOR }"
+        />
+        Dépenses
+      </span>
+      <span
+        v-if="hasCurrentMonth"
+        class="inline-flex items-center gap-1.5"
+        data-testid="legend-current"
+      >
+        <span
+          aria-hidden="true"
+          class="inline-block h-2.5 w-3 rounded-sm"
+          :style="{ backgroundColor: BAR_COLOR_CURRENT }"
+        />
+        mois en cours
+      </span>
+      <span v-if="hasComparison" class="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          class="inline-block h-2.5 w-3 rounded-sm"
           data-testid="legend-comparison-swatch"
-        ></span>
-        Comparaison
+          :style="{ backgroundColor: comparisonColor }"
+        />
+        comparaison
       </span>
-      <span class="flex items-center gap-1.5">
+      <span v-if="averageIncome > 0" class="inline-flex items-center gap-1.5">
         <span
-          class="inline-block w-3 h-2 rounded-sm"
-          :class="isDark ? 'bg-slate-500' : 'bg-gray-400'"
-        ></span>
-        {{
-          hasComparisonRange
-            ? 'Hors plages'
-            : hasPlanRange
-              ? 'Mois précédents'
-              : 'Dépenses'
-        }}
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-2 rounded-sm bg-amber-500"></span>
-        Mois en cours
-      </span>
-      <span v-if="averageIncome > 0" class="flex items-center gap-1.5">
-        <span
-          class="inline-block w-3 h-0.5 bg-green-500"
+          aria-hidden="true"
+          class="inline-block w-3 border-t-2"
           data-testid="legend-income-swatch"
-        ></span>
+          :style="{ borderColor: inkColor }"
+        />
         Revenus
       </span>
-      <span v-if="totalBudget > 0" class="flex items-center gap-1.5">
+      <span v-if="totalBudget > 0" class="inline-flex items-center gap-1.5">
         <span
-          class="inline-block w-3 h-0.5 bg-primary-600"
+          aria-hidden="true"
+          class="inline-block w-3 border-t-2 border-dashed"
           data-testid="legend-budget-swatch"
-        ></span>
-        Budget
+          :style="{ borderColor: inkColor }"
+        />
+        Enveloppe
       </span>
     </div>
 

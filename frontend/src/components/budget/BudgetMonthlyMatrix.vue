@@ -1,13 +1,12 @@
 <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import { computed } from 'vue'
   import { RouterLink } from 'vue-router'
   import { formatCurrency } from '@/lib/formatters'
   import {
     transactionsLink,
     type ExceptionalFilter,
   } from '@/lib/transactionsLink'
-  import { useIsMobile } from '@/composables/useMediaQuery'
-  import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+  import { STATE_BADGE_CLASSES } from '@/lib/stateTints'
 
   /** One column: a plan month that has started. */
   export interface MatrixMonth {
@@ -54,14 +53,12 @@
     exceptional?: ExceptionalFilter | undefined
   }>()
 
-  /**
-   * The grid is the widest thing on the page: on a phone it starts folded,
-   * one tap away, so the envelopes below are not pushed under a table that
-   * has to be scrolled sideways anyway. Isolating a month is done from the
-   * table's period band — this grid only shows which one is read.
+  /*
+   * The grid is folded by the page, in « Mois par mois » under the
+   * envelopes (agent-os/product/budget-refonte.md, lot 5): the page owns
+   * the `details`, the grid only draws. Isolating a month is done from
+   * « Mois lu » — this grid only shows which one is read.
    */
-  const isMobile = useIsMobile()
-  const open = ref(!isMobile.value)
 
   /** Column totals, plus the envelope total they are judged against. */
   const monthTotals = computed(() =>
@@ -76,11 +73,11 @@
 
   /**
    * How a cell reads against its envelope. A category without one is
-   * deliberately neutral rather than green: nothing was promised, so nothing
-   * was kept.
+   * neutral: nothing was promised, so nothing was kept. Only an
+   * overrun takes a tint, the amber of the state badges; the rest is ink.
    *
    * The running month is compared to the full envelope, not to a prorated
-   * share. Half a month over a prorated third would light up red every time
+   * share. Half a month over a prorated third would light up amber every time
    * a bill lands early, and a false alarm costs more here than a late one:
    * "over" must mean the month is genuinely spent through.
    */
@@ -92,10 +89,16 @@
   }
 
   const CELL_TONE: Record<'over' | 'under' | 'none', string> = {
-    over: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 font-semibold',
-    under:
-      'bg-green-50/60 dark:bg-green-900/15 text-green-700 dark:text-green-400',
+    over: `${STATE_BADGE_CLASSES.over} font-semibold`,
+    under: 'text-gray-900 dark:text-gray-100',
     none: 'text-gray-600 dark:text-gray-400',
+  }
+
+  /** A month's total over the total envelope reads as a cell over its own. */
+  function totalTone(total: number): string {
+    return budgetTotal.value > 0 && total > budgetTotal.value
+      ? CELL_TONE.over
+      : 'text-gray-900 dark:text-gray-100'
   }
 
   /**
@@ -157,38 +160,14 @@
 </script>
 
 <template>
-  <div
-    data-testid="budget-monthly-matrix"
-    class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6"
-  >
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        <button
-          type="button"
-          class="flex min-h-[44px] w-full items-center gap-2 text-left md:hidden"
-          :aria-expanded="open"
-          aria-controls="budget-monthly-matrix-table"
-          data-testid="matrix-toggle"
-          @click="open = !open"
-        >
-          Mois par mois
-          <IconChevronDown
-            class="h-4 w-4 text-gray-500 transition-transform dark:text-gray-400"
-            :class="{ '-rotate-180': open }"
-          />
-        </button>
-        <span class="max-md:hidden">Mois par mois</span>
-      </h2>
-      <p class="hidden text-xs text-gray-500 sm:block dark:text-gray-400">
-        Rouge : l'enveloppe du mois est dépassée. Le mois isolé dans le tableau
-        est mis en avant.
-      </p>
-    </div>
+  <div data-testid="budget-monthly-matrix">
+    <p class="mb-2 hidden text-xs text-gray-500 sm:block dark:text-gray-400">
+      En ambre, l’enveloppe du mois est dépassée. Le mois lu est mis en avant.
+    </p>
 
     <!-- The table is the one thing on this page that legitimately grows wider
          than the viewport, so it scrolls inside its own box. -->
     <div
-      v-show="open"
       id="budget-monthly-matrix-table"
       class="overflow-x-auto -mx-4 sm:mx-0"
       data-testid="matrix-body"
@@ -202,7 +181,7 @@
               Catégorie
             </th>
             <th
-              class="text-right text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-400 pb-2 px-2 sm:px-3 whitespace-nowrap"
+              class="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pb-2 px-2 sm:px-3 whitespace-nowrap"
             >
               Budget
             </th>
@@ -247,7 +226,8 @@
               </span>
             </td>
             <td
-              class="py-1.5 px-2 sm:px-3 text-right tabular-nums whitespace-nowrap text-primary-700 dark:text-primary-400"
+              :data-testid="`matrix-budget-${row.categoryName}`"
+              class="py-1.5 px-2 sm:px-3 text-right tabular-nums whitespace-nowrap text-gray-900 dark:text-gray-100"
             >
               <span v-if="row.budget > 0">
                 {{ formatCurrency(row.budget) }}
@@ -287,7 +267,8 @@
               Total
             </td>
             <td
-              class="py-2 px-2 sm:px-3 text-right tabular-nums font-semibold text-primary-700 dark:text-primary-400 whitespace-nowrap"
+              data-testid="matrix-budget-total"
+              class="py-2 px-2 sm:px-3 text-right tabular-nums font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap"
             >
               {{ formatCurrency(budgetTotal) }}
             </td>
@@ -295,12 +276,8 @@
               v-for="(total, index) in monthTotals"
               :key="months[index]?.ym ?? index"
               :data-testid="`matrix-total-${months[index]?.ym}`"
-              class="py-2 px-2 sm:px-3 text-right tabular-nums font-semibold whitespace-nowrap"
-              :class="
-                budgetTotal > 0 && total > budgetTotal
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-900 dark:text-gray-100'
-              "
+              class="py-2 px-2 sm:px-3 text-right tabular-nums font-semibold whitespace-nowrap rounded"
+              :class="totalTone(total)"
             >
               <RouterLink
                 :to="totalLink(index)"
@@ -315,7 +292,7 @@
       </table>
     </div>
     <p class="mt-2 text-xs text-gray-500 sm:hidden dark:text-gray-400">
-      Rouge : l'enveloppe du mois est dépassée. Faites défiler le tableau pour
+      En ambre, l’enveloppe du mois est dépassée. Faites défiler le tableau pour
       voir les mois suivants.
     </p>
   </div>

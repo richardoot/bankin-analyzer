@@ -23,6 +23,8 @@ const dashboardSources = import.meta.glob<string>(
     '../components/budget/BudgetProjectsLine.vue',
     '../components/budget/BudgetAmortizedLine.vue',
     '../components/budget/BudgetTableControls.vue',
+    '../components/budget/MonthlyExpensesChart.vue',
+    '../components/budget/BudgetMonthlyMatrix.vue',
   ],
   { query: '?raw', import: 'default', eager: true }
 )
@@ -61,6 +63,8 @@ describe('the state tints', () => {
         '../components/budget/BudgetProjectsLine.vue',
         '../components/budget/BudgetAmortizedLine.vue',
         '../components/budget/BudgetTableControls.vue',
+        '../components/budget/MonthlyExpensesChart.vue',
+        '../components/budget/BudgetMonthlyMatrix.vue',
       ])
     )
   })
