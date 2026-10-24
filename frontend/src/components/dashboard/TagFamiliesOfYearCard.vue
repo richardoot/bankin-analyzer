@@ -1,8 +1,8 @@
 <script setup lang="ts">
   /**
    * « Épisodes de l'année » — what each tag family (voyages, HYROX,
-   * concerts) has cost over the current calendar year, whatever the period
-   * the dashboard reads: an envelope is per year, and so is the question.
+   * concerts) has cost over the current calendar year, at the head of the
+   * Tags page: an envelope is per year, and so is the question.
    *
    * The year is the event's: a trip paid in November for January belongs to
    * January's year. The head says the families' weight once, in figures —
@@ -159,9 +159,8 @@
         Épisodes de l'année {{ year }}
       </h2>
       <p class="text-xs text-gray-500 dark:text-gray-400">
-        Par famille d'étiquettes, sur toute l'année quelle que soit la période,
-        rangé à l'année de l'événement. Part des dépenses exceptionnelles de
-        l'année.
+        Par famille d'étiquettes, sur l'année civile, rangé à l'année de
+        l'événement. Part des dépenses exceptionnelles de l'année.
       </p>
     </div>
 
@@ -246,12 +245,7 @@
           </span>
           <span class="flex shrink-0 items-center gap-1 tabular-nums">
             <span
-              class="font-semibold whitespace-nowrap"
-              :class="
-                isOver(family)
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-900 dark:text-gray-100'
-              "
+              class="font-semibold whitespace-nowrap text-gray-900 dark:text-gray-100"
               :data-testid="`family-of-year-spent-${family.id}`"
             >
               {{ formatCurrency(family.spent) }}
@@ -296,7 +290,7 @@
             ·
             <span
               v-if="isOver(family)"
-              class="font-semibold text-red-600 dark:text-red-400"
+              class="font-semibold text-amber-700 dark:text-amber-400"
             >
               dépassement de {{ formatCurrency(-(family.remaining ?? 0)) }}
             </span>

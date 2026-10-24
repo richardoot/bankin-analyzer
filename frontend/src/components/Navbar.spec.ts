@@ -39,6 +39,7 @@ async function mountNavbar(path = '/') {
       '/transactions',
       '/reimbursements',
       '/budget',
+      '/trends',
       '/tags',
       '/login',
     ].map(path => ({ path, component: Blank })),
@@ -83,6 +84,7 @@ describe('Navbar mobile menu', () => {
     '/transactions',
     '/reimbursements',
     '/budget',
+    '/trends',
     '/recurrences',
     '/tags',
     '/profile',
@@ -159,6 +161,7 @@ describe('Navbar mobile menu', () => {
     expect(labels).toEqual([
       'Comptes',
       'Remboursements',
+      'Tendances',
       'Étiquettes',
       'Mon profil',
       'Réglages',
@@ -200,5 +203,28 @@ describe('Navbar mobile menu', () => {
     await flushPromises()
     expect(menu.isOpen.value).toBe(false)
     wrapper.unmount()
+  })
+})
+
+describe('Navbar entries', () => {
+  beforeEach(() => {
+    authState.isAuthenticated = true
+    authState.user = { email: 'someone@example.com' }
+  })
+
+  it('opens « Tendances » right after « Budget », lit on its page', async () => {
+    const wrapper = await mountNavbar('/trends')
+
+    const link = wrapper.get('[data-testid="nav-trends-link"]')
+    expect(link.text()).toBe('Tendances')
+    expect(link.attributes('href')).toBe('/trends')
+    expect(link.attributes('aria-current')).toBe('page')
+
+    const order = wrapper
+      .findAll('[data-testid^="nav-"][data-testid$="-link"]')
+      .map(a => a.attributes('data-testid'))
+    const budget = order.indexOf('nav-budget-link')
+    expect(budget).toBeGreaterThanOrEqual(0)
+    expect(order[budget + 1]).toBe('nav-trends-link')
   })
 })

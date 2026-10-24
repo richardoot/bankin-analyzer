@@ -175,3 +175,23 @@ export function formatMonth(
   const name = options.capitalize === false ? label.toLowerCase() : label
   return options.year === false ? name : `${name} ${date.getFullYear()}`
 }
+
+/**
+ * A span of months in words, for a heading: « novembre 2025 à octobre
+ * 2026 », « mars à octobre 2026 » within one year, « octobre 2026 » for a
+ * single month. Takes `YYYY-MM` keys (or ISO dates), first and last.
+ */
+export function formatMonthRange(from: string, to: string): string {
+  const first = parseIsoDate(from)
+  const last = parseIsoDate(to)
+  if (!first || !last) return '—'
+  const long = (value: string, year: boolean) =>
+    formatMonth(value, { style: 'long', capitalize: false, year })
+  if (
+    first.getFullYear() === last.getFullYear() &&
+    first.getMonth() === last.getMonth()
+  ) {
+    return long(to, true)
+  }
+  return `${long(from, first.getFullYear() !== last.getFullYear())} à ${long(to, true)}`
+}

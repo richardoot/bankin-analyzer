@@ -1,79 +1,65 @@
 <script setup lang="ts">
-  import { onMounted, computed } from 'vue'
+  import { onMounted, computed, ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
-  import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
+  import IncomeExpensesChart from '@/components/charts/IncomeExpensesChart.vue'
   import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
-  import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
-  import SpendingStructureCard from '@/components/dashboard/SpendingStructureCard.vue'
-  import TagFamiliesOfYearCard from '@/components/dashboard/TagFamiliesOfYearCard.vue'
+  import StructureLines from '@/components/dashboard/StructureLines.vue'
+  import PeriodSummaryLines from '@/components/dashboard/PeriodSummaryLines.vue'
   import SpendingTrendsCard from '@/components/dashboard/SpendingTrendsCard.vue'
+  import TodoCard from '@/components/dashboard/TodoCard.vue'
+  import { todoItems as composeTodoItems } from '@/lib/todo'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
   import { useFiltersStore } from '@/stores/filters'
-  import { formatCurrency, formatMonth } from '@/lib/formatters'
-  import { UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
-  import {
-    MAX_LINK_LIST,
-    NO_CATEGORY,
-    transactionsLink,
-  } from '@/lib/transactionsLink'
+  import { formatCompactCurrency, formatMonth } from '@/lib/formatters'
+  import { transactionsLink } from '@/lib/transactionsLink'
+  import { DASHBOARD_THRESHOLDS } from '@/lib/dashboardThresholds'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import type { TrendsResponseDto } from '@/lib/api'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
-  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
-  import BaseField from '@/components/ui/BaseField.vue'
-  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
+  import MonthBand from '@/components/dashboard/MonthBand.vue'
+  import { useMonthData } from '@/composables/useMonthData'
+  import { useAccountsStore } from '@/stores/accounts'
+  import { useMediaQuery } from '@/composables/useMediaQuery'
 
   const router = useRouter()
 
   const {
     totalExpenses,
     totalIncome,
-    averageMonthlyExpenses,
-    averageEverydayMonthlyExpenses,
-    averageExceptionalMonthlyExpenses,
     breakdownMode,
     setBreakdownMode,
     displayedTotalExpenses,
-    displayedAverageMonthlyExpenses,
     pendingPreferenceSyncError,
     exceptionalEvents,
     hasExceptionalExpenses,
     hasAmortizedExpenses,
+    periodMonths,
+    averagesReadClosedMonths,
     averageMonthlyIncome,
     averageMonthlySavings,
-    periodMonths,
     monthlyData,
     incomeCategoriesDetailed,
     spendingStructure,
     everydaySpendingStructure,
-    savings,
-    savingsTransfers,
-    pendingReceivables,
-    savingsRate,
-    remainingToLive,
     tagFamiliesOfYear,
-    realExpensesOfYear,
-    exceptionalExpensesOfYear,
-    expensesSparkline,
-    incomeSparkline,
-    savingsSparkline,
-    incomeByCategory,
+    structureBreakdown,
+    structureShareByMonth,
+    exceptionalByCategory,
+    pendingReceivables,
     expenseCategoriesDetailed,
     monthLabels,
+    periodRangeLabel,
     allExpenseCategories,
-    allIncomeCategories,
-    selectedIncomeCategory,
-    expensesByMonth,
-    filteredIncomeByMonth,
-    setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,
     isLoading,
@@ -81,7 +67,43 @@
     fetchData,
     hasLoaded,
   } = useDashboardData()
+
+  /** The trends the « Ce qui change » card loaded, for « À faire ». */
+  const trendsData = ref<TrendsResponseDto | null>(null)
+  /** « À faire »: what the summary and the trends ask the user to do. */
+  const todoItems = computed(() =>
+    composeTodoItems(
+      {
+        spendingStructure: spendingStructure.value,
+        pendingReceivables: pendingReceivables.value,
+        tagFamiliesOfYear: tagFamiliesOfYear.value,
+      },
+      trendsData.value
+    )
+  )
   const filtersStore = useFiltersStore()
+  const accountsStore = useAccountsStore()
+
+  /** The reading, written through the composable that keeps it. */
+  const breakdownModeModel = computed({
+    get: () => breakdownMode.value,
+    set: setBreakdownMode,
+  })
+
+  /**
+   * « Ce mois-ci »: its own request, sent with the summary, following the
+   * reading and the switches, never the period.
+   */
+  const {
+    data: monthData,
+    isLoading: isMonthLoading,
+    error: monthError,
+    fetchMonth,
+  } = useMonthData({
+    reading: breakdownMode,
+    deductReimbursements,
+    deductPendingReimbursements,
+  })
 
   // A first answer came back: later fetches are refreshes, shown over the
   // current figures, never by swapping the page — and its filters — for a
@@ -98,24 +120,15 @@
   )
 
   // An empty unbounded period means no transaction at all — the onboarding.
-  // Any other empty period only means nothing happened in it.
-  const isEmptyPeriod = computed(() => filtersStore.timePeriod !== 'all')
+  // Any other empty period only means nothing happened in it — unless there
+  // is no account either: the default period is twelve months now, and a
+  // newcomer must still land on the way in, not on « choose another period ».
+  const isEmptyPeriod = computed(
+    () => filtersStore.timePeriod !== 'all' && accountsStore.accounts.length > 0
+  )
 
   function showAllPeriods(): void {
     filtersStore.setTimePeriod('all')
-  }
-
-  /**
-   * Sum of the listed events, so the banner header matches the chips below it.
-   * Deliberately not `totalExceptionalExpenses`, which is net of reimbursements
-   * while the per-event amounts are gross.
-   */
-  const exceptionalEventsTotal = computed(() =>
-    exceptionalEvents.value.reduce((sum, e) => sum + e.amount, 0)
-  )
-
-  function openTagAnalysis(tagId: string): void {
-    router.push({ name: 'tag-analysis', params: { id: tagId } })
   }
 
   /**
@@ -132,132 +145,73 @@
     }
   })
 
-  /** The `YYYY-MM` behind each bar of the monthly charts. */
-  const monthKeys = computed(() => monthlyData.value.map(d => d.month))
-
-  function linkId(categoryId: string): string {
-    return categoryId === UNCATEGORIZED_CATEGORY_ID ? NO_CATEGORY : categoryId
-  }
-
-  /** A category's id from the name a chart draws, or null for « Autres ». */
-  function idByName(
-    categories: { categoryId: string; category: string }[],
-    name: string
-  ): string | null {
-    const found = categories.find(c => c.category === name)
-    return found ? linkId(found.categoryId) : null
-  }
-
-  const incomeSliceIds = computed(() =>
-    incomeByCategory.value.labels.map(label =>
-      idByName(incomeCategoriesDetailed.value, label)
-    )
-  )
-
-  type LinkType = 'EXPENSE' | 'INCOME'
-
   /** The expense categories' names by id: a trend tile names a subcategory's parent. */
   const expenseCategoryNames = computed<Record<string, string>>(() =>
     Object.fromEntries(allExpenseCategories.value.map(c => [c.id, c.name]))
   )
 
-  function categoriesOf(type: LinkType): { id: string; name: string }[] {
-    return type === 'EXPENSE'
-      ? allExpenseCategories.value
-      : allIncomeCategories.value
-  }
-
-  function nameOf(type: LinkType, id: string | null): string | undefined {
-    if (id === NO_CATEGORY) return 'Sans catégorie'
-    return categoriesOf(type).find(c => c.id === id)?.name
-  }
+  type LinkType = 'EXPENSE' | 'INCOME'
 
   const KIND_LABEL: Record<LinkType, string> = {
     EXPENSE: 'Dépenses',
     INCOME: 'Revenus',
   }
 
-  /**
-   * The category the monthly chart's select holds. Only income has one: an
-   * expense category draws its months in its own row of the list.
-   */
-  function selectedOf(type: LinkType): string | null {
-    return type === 'INCOME' ? selectedIncomeCategory.value : null
-  }
-
-  /** The whole period, narrowed to the category the chart's select holds. */
+  /** The whole period's expenses, or its income. */
   function periodLink(type: LinkType) {
-    const selected = selectedOf(type)
-    const name = nameOf(type, selected)
     return transactionsLink({
       type,
-      categoryId: selected ? linkId(selected) : undefined,
       ...linkWindow.value,
       gross: true,
-      label: name
-        ? `${KIND_LABEL[type]} · ${name}`
-        : `${KIND_LABEL[type]} de la période`,
+      label: `${KIND_LABEL[type]} de la période`,
     })
   }
   const expensesLink = computed(() => periodLink('EXPENSE'))
   const incomeLink = computed(() => periodLink('INCOME'))
 
-  function openMonth(type: LinkType, month: string): void {
-    const selected = selectedOf(type)
-    const name = nameOf(type, selected) ?? KIND_LABEL[type]
+  /** A column of the monthly chart opens its month's expenses. */
+  function openMonth(month: string): void {
     void router.push(
       transactionsLink({
-        type,
-        categoryId: selected ? linkId(selected) : undefined,
+        type: 'EXPENSE',
         month,
         gross: true,
-        label: `${name} · ${formatMonth(month, { capitalize: false })}`,
+        label: `${KIND_LABEL.EXPENSE} · ${formatMonth(month, { capitalize: false })}`,
       })
     )
   }
 
-  /**
-   * A slice of the income donut opens its category. Income has no events to
-   * leave out: the link counts everything, as the monthly bars do.
-   */
-  function openCategory(type: LinkType, id: string): void {
-    void router.push(
-      transactionsLink({
-        type,
-        categoryId: id,
-        ...linkWindow.value,
-        gross: true,
-        label: nameOf(type, id),
-      })
-    )
-  }
+  /** « Où part l'argent · novembre 2025 à octobre 2026 ». */
+  const whereTitle = computed(() =>
+    periodRangeLabel.value
+      ? `Où part l'argent · ${periodRangeLabel.value}`
+      : "Où part l'argent"
+  )
 
-  /** The « Autres » slice: every category it merges, at once. */
-  function openCategories(type: LinkType, ids: string[]): void {
-    if (ids.length === 0 || ids.length > MAX_LINK_LIST) return
-    void router.push(
-      transactionsLink({
-        type,
-        categoryIds: ids,
-        ...linkWindow.value,
-        gross: true,
-        label: `${KIND_LABEL[type]} · Autres (${ids.length})`,
-      })
-    )
-  }
-
-  function eventLink(event: { id: string; name: string }) {
-    return transactionsLink({
-      tagId: event.id,
-      ...linkWindow.value,
-      gross: true,
-      label: event.name,
-    })
-  }
+  /** « Les 12 catégories, les plus lourdes en tête ». */
+  const categoriesSubtitle = computed(() => {
+    const n = expenseCategoriesDetailed.value.length
+    return n === 1
+      ? 'Une seule catégorie sur la période'
+      : `Les ${n} catégories, les plus lourdes en tête`
+  })
 
   onMounted(() => {
     fetchData()
+    void fetchMonth()
   })
+
+  /**
+   * « Revenus et dépenses par mois » is a native `details`: open by
+   * default on a desk, folded below `sm` (agent-os/product/dashboard-refonte.md,
+   * lot 7). `open` is an attribute: the page follows the element's own
+   * toggle so a tap is never undone by a render.
+   */
+  const isPhone = useMediaQuery('(max-width: 639.98px)')
+  const chartsOpen = ref(!isPhone.value)
+  function onChartsToggle(event: Event): void {
+    chartsOpen.value = (event.target as HTMLDetailsElement).open
+  }
 </script>
 
 <template>
@@ -286,6 +240,17 @@
           </svg>
           <span>Mise à jour...</span>
         </div>
+        <!-- The ways of reading the figures, behind one button that says
+             which one is on. -->
+        <ReadingMenu
+          v-if="!showFullLoader"
+          v-model:breakdown-mode="breakdownModeModel"
+          v-model:deduct-reimbursements="deductReimbursements"
+          v-model:deduct-pending-reimbursements="deductPendingReimbursements"
+          :has-exceptional-expenses="hasExceptionalExpenses"
+          :has-amortized-expenses="hasAmortizedExpenses"
+          :pending-sync-error="pendingPreferenceSyncError"
+        />
       </template>
     </PageHeader>
 
@@ -310,8 +275,8 @@
     <!-- Initial load: the page's own shape, not a spinner. -->
     <div v-if="showFullLoader" class="space-y-6" aria-busy="true">
       <SkeletonBlock class="h-24 rounded-xl" />
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <SkeletonBlock v-for="n in 3" :key="n" class="h-28 rounded-xl" />
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <SkeletonBlock v-for="n in 4" :key="n" class="h-28 rounded-xl" />
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <SkeletonBlock class="h-80 rounded-xl" />
@@ -325,510 +290,211 @@
       class="transition-opacity duration-200"
       :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
     >
-      <!-- Period + reimbursement toggles (harmonized in a single card) -->
-      <BaseCard
-        bordered
-        data-testid="dashboard-filters-card"
-        class="mb-6 space-y-4"
-      >
-        <TimePeriodSelector />
-
-        <div
-          class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
-        >
-          <label
-            for="dashboard-deduct-reimbursements"
-            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-          >
-            <ToggleSwitch
-              id="dashboard-deduct-reimbursements"
-              :checked="deductReimbursements"
-              label="Déduire les remboursements reçus"
-              data-testid="toggle-deduct-reimbursements"
-              @change="deductReimbursements = $event"
-            />
-            <span
-              class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-            >
-              <span class="sm:hidden">Déduire les remb. reçus</span>
-              <span class="hidden sm:inline"
-                >Déduire les remboursements reçus</span
-              >
-            </span>
-          </label>
-          <label
-            for="dashboard-deduct-pending"
-            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-          >
-            <ToggleSwitch
-              id="dashboard-deduct-pending"
-              :checked="deductPendingReimbursements"
-              label="Déduire les remboursements en attente"
-              data-testid="toggle-deduct-pending"
-              @change="deductPendingReimbursements = $event"
-            />
-            <span
-              class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-            >
-              <span class="sm:hidden">Déduire les remb. en attente</span>
-              <span class="hidden sm:inline"
-                >Déduire les remboursements en attente</span
-              >
-            </span>
-          </label>
-        </div>
-        <!-- The two switches look alike but are not: one is a reading of
-             this screen, the other a preference the budget shares. -->
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-          « En attente » est une préférence enregistrée, partagée avec le Budget
-          ; « reçus » ne vaut que pour cette lecture.
-        </p>
-        <InlineAlert
-          v-if="pendingPreferenceSyncError"
-          variant="warning"
-          data-testid="dashboard-pending-sync-error"
-        >
-          Le réglage « en attente » s'applique ici, mais n'a pas pu être
-          enregistré sur le serveur : {{ pendingPreferenceSyncError }}
-        </InlineAlert>
-
-        <!-- One reading for the whole page: the expenses KPI, the
-             structure, the donut and the list follow it together. -->
-        <div
-          v-if="hasExceptionalExpenses || hasAmortizedExpenses"
-          class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-4 dark:border-slate-700"
-          data-testid="dashboard-breakdown-mode"
-        >
-          <span
-            id="dashboard-reading-label"
-            class="text-xs font-medium text-gray-700 dark:text-gray-300"
-          >
-            Lecture des dépenses
-          </span>
-          <SegmentedControl
-            :model-value="breakdownMode"
-            size="sm"
-            labelled-by="dashboard-reading-label"
-            :options="[
-              {
-                value: 'everyday',
-                label: 'Vie courante',
-                testId: 'breakdown-mode-everyday',
-              },
-              { value: 'real', label: 'Tout', testId: 'breakdown-mode-real' },
-            ]"
-            @update:model-value="setBreakdownMode($event)"
-          />
-          <span
-            v-if="hasExceptionalExpenses"
-            class="text-xs text-gray-500 dark:text-gray-400"
-          >
-            {{
-              breakdownMode === 'everyday'
-                ? 'Les dépenses d’événements sont mises à part.'
-                : 'Les dépenses d’événements sont comprises.'
-            }}
-          </span>
-          <!-- A smoothed purchase counts by its slices: the figures are no
-               longer the cash, and the reading says so. -->
-          <span
-            v-if="hasAmortizedExpenses"
-            class="basis-full text-xs text-teal-800 sm:basis-auto dark:text-teal-300"
-            data-testid="dashboard-amortized-note"
-          >
-            {{
-              breakdownMode === 'everyday'
-                ? 'Les achats lissés comptent par tranches mensuelles : un total sur la période ne correspond plus à l’argent sorti du compte.'
-                : 'Les achats lissés comptent en entier à leur date.'
-            }}
-          </span>
-        </div>
-      </BaseCard>
-
-      <!-- Below the filters, not above: it arrives after the first fetch
-           and used to push the period bar down as it was being aimed at. -->
+      <!-- Under the header, not above it: it arrives after the first fetch
+           and must not push the reading menu down as it is being aimed at. -->
       <LegacyMigrationBanner class="mb-6" />
 
       <template v-if="hasAnyData">
-        <!-- KPI cards: monthly averages -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
-          <!-- Average monthly expenses -->
-          <BaseCard
-            data-testid="kpi-card-expenses"
-            class="border-l-4 border-red-500"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div
-                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
-                  Dépenses moyennes / mois
-                </div>
-                <div
-                  class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
-                  data-testid="kpi-expenses-value"
-                >
-                  {{ formatCurrency(displayedAverageMonthlyExpenses) }}
-                </div>
-                <!-- The other reading, so the gap between the two — the
-                     events — is always on screen. -->
-                <div
-                  v-if="hasExceptionalExpenses"
-                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                  data-testid="kpi-expenses-other-reading"
-                >
-                  <template v-if="breakdownMode === 'everyday'">
-                    hors événements ·
-                    <span
-                      class="font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {{ formatCurrency(averageMonthlyExpenses) }}
-                    </span>
-                    / mois tout compris
-                  </template>
-                  <template v-else>
-                    dont vie courante
-                    <span
-                      class="font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {{ formatCurrency(averageEverydayMonthlyExpenses) }}
-                    </span>
-                    / mois, événements
-                    {{ formatCurrency(averageExceptionalMonthlyExpenses) }}
-                  </template>
-                </div>
-              </div>
-              <SparklineChart
-                v-if="expensesSparkline.length >= 2"
-                :data="expensesSparkline"
-                color="#ef4444"
-              />
-            </div>
-          </BaseCard>
-
-          <!-- Average monthly income -->
-          <BaseCard
-            data-testid="kpi-card-income"
-            class="border-l-4 border-green-500"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div
-                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
-                  Revenus moyens / mois
-                </div>
-                <div
-                  class="mt-2 text-2xl font-bold text-green-700 dark:text-green-400"
-                >
-                  {{ formatCurrency(averageMonthlyIncome) }}
-                </div>
-              </div>
-              <SparklineChart
-                v-if="incomeSparkline.length >= 2"
-                :data="incomeSparkline"
-                color="#22c55e"
-              />
-            </div>
-          </BaseCard>
-
-          <!-- Average monthly savings -->
-          <BaseCard
-            data-testid="kpi-card-savings"
-            class="border-l-4"
-            :class="
-              averageMonthlySavings >= 0 ? 'border-green-500' : 'border-red-500'
-            "
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div
-                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
-                  Épargne moyenne / mois
-                </div>
-                <div
-                  class="mt-2 text-2xl font-bold"
-                  :class="
-                    averageMonthlySavings >= 0
-                      ? 'text-green-700 dark:text-green-400'
-                      : 'text-red-600 dark:text-red-400'
-                  "
-                >
-                  {{ formatCurrency(averageMonthlySavings) }}
-                </div>
-              </div>
-              <SparklineChart
-                v-if="savingsSparkline.length >= 2"
-                :data="savingsSparkline"
-                :color="averageMonthlySavings >= 0 ? '#22c55e' : '#ef4444'"
-              />
-            </div>
-          </BaseCard>
-        </div>
+        <!-- « Ce mois-ci »: the current month to date, first; the period
+             governs only what comes below it. -->
+        <MonthBand
+          class="mb-8"
+          :data="monthData"
+          :reading="breakdownMode"
+          :is-loading="isMonthLoading"
+          :error="monthError"
+          @retry="fetchMonth()"
+        />
 
         <!-- What changes: after the totals, before their detail. Its own
              request, sent once the summary is on screen; it follows the
-             reading and the reimbursement switches, never the period. -->
+             reading and the reimbursement switches, never the period.
+             Compact here: the lead and three tiles, the rest on /trends. -->
         <SpendingTrendsCard
           class="mb-8"
+          compact
           :reading="breakdownMode"
           :deduct-reimbursements="deductReimbursements"
           :deduct-pending-reimbursements="deductPendingReimbursements"
           :category-names="expenseCategoryNames"
+          @loaded="trendsData = $event"
         />
 
-        <SpendingStructureCard
-          v-if="spendingStructure && everydaySpendingStructure"
-          class="mb-8"
-          :actual="spendingStructure"
-          :everyday="everydaySpendingStructure"
-          :savings="savings"
-          :savings-transfers="savingsTransfers"
-          :pending-receivables="pendingReceivables"
-          :savings-rate="savingsRate"
-          :remaining-to-live="remainingToLive"
-          :period-months="periodMonths"
-          :reading="breakdownMode === 'everyday' ? 'everyday' : 'actual'"
-          :window="linkWindow"
-        />
+        <!-- « À faire »: the lines to file, the money advanced, an envelope
+             over, a charge that moved. Renders nothing when nothing is to do. -->
+        <TodoCard class="mb-8" :items="todoItems" />
 
-        <!-- The families over the year: only where an event touches the
-             period, like the reading selector. -->
-        <TagFamiliesOfYearCard
-          v-if="hasExceptionalExpenses && tagFamiliesOfYear.length > 0"
-          class="mb-8"
-          :families="tagFamiliesOfYear"
-          :real-expenses="realExpensesOfYear"
-          :exceptional-expenses="exceptionalExpensesOfYear"
-        />
-
-        <!-- Expenses section (primary) -->
-        <section data-testid="dashboard-expenses-section" class="mb-10">
-          <h2
-            class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4"
+        <!-- « Où part l'argent »: the period, in its heading and its
+             selector, then one card — the structure, the months, the
+             categories, the summary lines. -->
+        <section
+          data-testid="dashboard-where-section"
+          aria-labelledby="dashboard-where-title"
+          class="mb-10"
+        >
+          <header
+            class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
           >
-            Dépenses
-          </h2>
-          <!-- Monthly expenses chart. No category select: each row of the
-               list below draws its own months. -->
-          <BaseCard data-testid="dashboard-charts-section">
-            <h3
-              class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
+            <h2
+              id="dashboard-where-title"
+              class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+              data-testid="dashboard-where-title"
             >
-              Dépenses par mois
-            </h3>
-            <div v-if="totalExpenses > 0" class="relative">
-              <!-- A bar opens its month; the link under the chart is the
-                   keyboard way to the same period. -->
-              <MonthlyBarChart
-                :data="expensesByMonth"
-                title="Dépenses"
-                color="#ef4444"
-                :months="monthKeys"
-                @select-month="month => openMonth('EXPENSE', month)"
-              />
-              <div class="mt-2 flex justify-end">
-                <TransactionsLink
-                  :to="expensesLink"
-                  subject="la période"
-                  data-testid="expenses-transactions-link"
-                />
-              </div>
+              {{ whereTitle }}
+            </h2>
+            <!-- The period governs this section only: it says so by
+                 sitting in its header. -->
+            <div data-testid="dashboard-period" class="lg:shrink-0">
+              <TimePeriodSelector />
             </div>
-            <div
-              v-else
-              class="py-12 text-center text-gray-500 dark:text-gray-400"
-            >
-              Aucune dépense enregistrée
-            </div>
-          </BaseCard>
+          </header>
 
-          <!-- Category breakdown list (drill-down) -->
-          <BaseCard v-if="expenseCategoriesDetailed.length > 0" class="mt-6">
-            <h3
-              class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1"
-            >
-              Détail par catégorie
-            </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              Cliquez sur une catégorie pour voir ses sous-catégories et son
-              évolution mensuelle.
-              <template v-if="breakdownMode === 'everyday'">
-                Moyennes hors dépenses d'événements : seules les catégories
-                concernées changent de valeur.
-              </template>
-            </p>
-
-            <!-- What the exceptional share is made of -->
-            <div
-              v-if="hasExceptionalExpenses && exceptionalEvents.length > 0"
-              class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
-            >
-              <p
-                class="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1.5"
-              >
-                Événements de la période —
-                {{ formatCurrency(exceptionalEventsTotal) }}
-              </p>
-              <div class="flex flex-wrap gap-1.5">
-                <!-- The chip opens the tag's analysis; the arrow beside it,
-                     its transactions over the period. -->
-                <span
-                  v-for="event in exceptionalEvents"
-                  :key="event.id"
-                  class="inline-flex items-center gap-0.5 rounded-full bg-white pr-1 dark:bg-slate-900"
-                >
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
-                    @click="openTagAnalysis(event.id)"
-                  >
-                    <span
-                      class="inline-block h-2 w-2 rounded-full shrink-0"
-                      :style="{ backgroundColor: event.color ?? '#9ca3af' }"
-                    ></span>
-                    {{ event.name }}
-                    <span class="font-semibold tabular-nums">
-                      {{ formatCurrency(event.amount) }}
-                    </span>
-                  </button>
-                  <TransactionsLink
-                    :to="eventLink(event)"
-                    :subject="event.name"
-                    icon-only
-                    class="h-6 w-6"
-                    :data-testid="`event-transactions-link-${event.id}`"
-                  />
-                </span>
-              </div>
-            </div>
-
-            <CategoryBreakdownList
-              :categories="expenseCategoriesDetailed"
+          <BaseCard
+            data-testid="dashboard-where-card"
+            class="space-y-6 sm:space-y-8"
+          >
+            <StructureLines
+              v-if="spendingStructure && everydaySpendingStructure"
+              :actual="spendingStructure"
+              :everyday="everydaySpendingStructure"
+              :reading="breakdownMode"
+              :period-months="periodMonths"
+              :window="linkWindow"
+              :breakdown="structureBreakdown"
+              :share-by-month="structureShareByMonth"
               :month-labels="monthLabels"
-              :total="displayedTotalExpenses"
-              :mode="breakdownMode"
+            />
+
+            <!-- The months: a column opens its month, the link under the
+                 chart is the keyboard way to the whole period. Open on a
+                 desk, folded on a phone (lot 7): the list matters more
+                 there, the chart is one tap away. -->
+            <details
+              data-testid="dashboard-charts-section"
+              class="group"
+              :open="chartsOpen"
+              @toggle="onChartsToggle"
+            >
+              <summary
+                class="-mx-2 flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded px-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-0 [&::-webkit-details-marker]:hidden"
+                data-testid="dashboard-charts-toggle"
+              >
+                <SectionLabel as="h3"
+                  >Revenus et dépenses par mois</SectionLabel
+                >
+                <span
+                  aria-hidden="true"
+                  class="text-xs text-gray-500 transition-transform group-open:rotate-180 dark:text-gray-400"
+                  >▾</span
+                >
+              </summary>
+              <!-- Drawn once open: Apex measures its box, a folded one is 0px. -->
+              <template v-if="chartsOpen">
+                <IncomeExpensesChart
+                  class="mt-2"
+                  :months="monthlyData"
+                  :reading="breakdownMode"
+                  :habit="monthData?.habit ?? null"
+                  @select-month="openMonth"
+                />
+                <div class="mt-2 flex justify-end">
+                  <TransactionsLink
+                    :to="expensesLink"
+                    subject="la période"
+                    data-testid="expenses-transactions-link"
+                  />
+                </div>
+              </template>
+            </details>
+
+            <!-- Every category, the heaviest first; a sparkline only on
+                 the big ones, every row's months once it is expanded. -->
+            <div
+              v-if="expenseCategoriesDetailed.length > 0"
+              data-testid="dashboard-categories"
+            >
+              <h3
+                class="text-base font-semibold text-gray-900 dark:text-gray-100"
+              >
+                Par catégorie · moyenne par mois, sur
+                <span class="tabular-nums">{{
+                  formatCompactCurrency(displayedTotalExpenses)
+                }}</span>
+              </h3>
+              <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ categoriesSubtitle }}
+              </p>
+              <CategoryBreakdownList
+                :categories="expenseCategoriesDetailed"
+                :month-labels="monthLabels"
+                :total="displayedTotalExpenses"
+                :mode="breakdownMode"
+                :window="linkWindow"
+                :trend-min-share="DASHBOARD_THRESHOLDS.sparklineMinShare"
+              />
+            </div>
+
+            <PeriodSummaryLines
+              :average-income="averageMonthlyIncome"
+              :average-savings="averageMonthlySavings"
+              :period-months="periodMonths"
+              :closed-months="averagesReadClosedMonths"
+              :income-sources="incomeCategoriesDetailed"
+              :income-link="incomeLink"
+              :events="hasExceptionalExpenses ? exceptionalEvents : []"
+              :families="tagFamiliesOfYear"
+              :has-exceptional-expenses="hasExceptionalExpenses"
+              :events-by-category="exceptionalByCategory"
               :window="linkWindow"
             />
           </BaseCard>
         </section>
-
-        <!-- Income section (secondary) -->
-        <section data-testid="dashboard-income-section">
-          <h2
-            class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4"
-          >
-            Revenus
-          </h2>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Monthly income chart -->
-            <BaseCard>
-              <div
-                class="mb-4 flex flex-wrap items-center justify-between gap-2"
-              >
-                <h3
-                  class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                >
-                  Revenus par mois
-                </h3>
-                <BaseField
-                  v-if="allIncomeCategories.length > 0"
-                  as="select"
-                  size="sm"
-                  label="Catégorie des revenus par mois"
-                  label-hidden
-                  data-testid="income-category-filter"
-                  class="max-w-full"
-                  :model-value="selectedIncomeCategory ?? ''"
-                  @update:model-value="
-                    setSelectedIncomeCategory($event ? String($event) : null)
-                  "
-                >
-                  <option value="">Toutes les catégories</option>
-                  <option
-                    v-for="cat in allIncomeCategories"
-                    :key="cat.id"
-                    :value="cat.id"
-                  >
-                    {{ cat.name }}
-                  </option>
-                </BaseField>
-              </div>
-              <div v-if="totalIncome > 0" class="relative">
-                <MonthlyBarChart
-                  :data="filteredIncomeByMonth"
-                  title="Revenus"
-                  color="#22c55e"
-                  :months="monthKeys"
-                  @select-month="month => openMonth('INCOME', month)"
-                />
-                <div class="mt-2 flex justify-end">
-                  <TransactionsLink
-                    :to="incomeLink"
-                    subject="la période"
-                    data-testid="income-transactions-link"
-                  />
-                </div>
-              </div>
-              <div
-                v-else
-                class="py-12 text-center text-gray-500 dark:text-gray-400"
-              >
-                Aucun revenu enregistré
-              </div>
-            </BaseCard>
-
-            <!-- Income pie chart -->
-            <BaseCard>
-              <h3
-                class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
-              >
-                Revenus par catégorie
-              </h3>
-              <div
-                v-if="incomeByCategory.values.length > 0"
-                class="h-64 sm:h-80"
-              >
-                <CategoryPieChart
-                  :data="incomeByCategory"
-                  title="Revenus"
-                  :ids="incomeSliceIds"
-                  @select="id => openCategory('INCOME', id)"
-                  @select-others="ids => openCategories('INCOME', ids)"
-                />
-              </div>
-              <div
-                v-else
-                class="py-12 text-center text-gray-500 dark:text-gray-400"
-              >
-                Aucun revenu enregistré
-              </div>
-            </BaseCard>
-          </div>
-        </section>
       </template>
 
-      <!-- A quiet period, for a user who has data elsewhere in time -->
-      <BaseCard
-        v-else-if="!error && isEmptyPeriod"
-        padding="none"
-        data-testid="dashboard-empty-period"
+      <!-- A quiet period, for a user who has data elsewhere in time, or a
+           failed first load: the period stays at hand to pick another —
+           a new period is also a way to try again. -->
+      <section
+        v-else-if="error || isEmptyPeriod"
+        data-testid="dashboard-where-section"
+        aria-labelledby="dashboard-where-title"
       >
-        <EmptyState
-          title="Aucune transaction sur cette période"
-          description="Choisissez une autre période, ou affichez tout l'historique."
+        <header
+          class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
         >
-          <template #action>
-            <BaseButton
-              data-testid="dashboard-show-all"
-              @click="showAllPeriods"
-            >
-              Afficher tout
-            </BaseButton>
-          </template>
-        </EmptyState>
-      </BaseCard>
+          <h2
+            id="dashboard-where-title"
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            data-testid="dashboard-where-title"
+          >
+            {{ whereTitle }}
+          </h2>
+          <!-- The period governs this section only: it says so by
+               sitting in its header. -->
+          <div data-testid="dashboard-period" class="lg:shrink-0">
+            <TimePeriodSelector />
+          </div>
+        </header>
+        <BaseCard
+          v-if="!error"
+          padding="none"
+          data-testid="dashboard-empty-period"
+        >
+          <EmptyState
+            title="Aucune transaction sur cette période"
+            description="Choisissez une autre période, ou affichez tout l'historique."
+          >
+            <template #action>
+              <BaseButton
+                data-testid="dashboard-show-all"
+                @click="showAllPeriods"
+              >
+                Afficher tout
+              </BaseButton>
+            </template>
+          </EmptyState>
+        </BaseCard>
+      </section>
 
       <!-- Zero transactions: one question, two explicit ways in -->
       <BaseCard

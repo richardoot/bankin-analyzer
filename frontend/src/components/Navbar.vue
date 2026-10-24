@@ -50,6 +50,7 @@
       testId: 'nav-reimbursements-link',
     },
     { to: '/budget', label: 'Budget', testId: 'nav-budget-link' },
+    { to: '/trends', label: 'Tendances', testId: 'nav-trends-link' },
     {
       to: '/recurrences',
       label: 'Récurrences',

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useDashboardData } from './useDashboardData'
 import { api } from '@/lib/api'
-import type { DashboardSummaryDto, TransactionDto } from '@/lib/api'
+import type { DashboardSummaryDto } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
@@ -173,37 +173,26 @@ describe('useDashboardData', () => {
 
       vi.mocked(api.getDashboardSummary).mockResolvedValue(emptySummary)
 
-      const { fetchData, monthlyData, expensesByMonth, incomeByMonth } =
-        useDashboardData()
+      const { fetchData, monthlyData, periodRangeLabel } = useDashboardData()
       await fetchData()
 
       expect(monthlyData.value).toHaveLength(0)
-      expect(expensesByMonth.value.labels).toEqual([])
-      expect(expensesByMonth.value.values).toEqual([])
-      expect(incomeByMonth.value.labels).toEqual([])
-      expect(incomeByMonth.value.values).toEqual([])
+      // An unbounded period with nothing in it names no range.
+      expect(periodRangeLabel.value).toBeNull()
     })
   })
 
   describe('computed properties from summary', () => {
-    it('should compute expensesByMonth from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+    it('names the months the summary covers, for the section heading', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        monthLabels: ['2025-11', '2025-12', '2026-01', '2026-10'],
+      })
 
-      const { fetchData, expensesByMonth } = useDashboardData()
+      const { fetchData, periodRangeLabel } = useDashboardData()
       await fetchData()
 
-      expect(expensesByMonth.value.labels).toEqual(['Jan 2024', 'Fév 2024'])
-      expect(expensesByMonth.value.values).toEqual([165.5, 800])
-    })
-
-    it('should compute incomeByMonth from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, incomeByMonth } = useDashboardData()
-      await fetchData()
-
-      expect(incomeByMonth.value.labels).toEqual(['Jan 2024', 'Fév 2024'])
-      expect(incomeByMonth.value.values).toEqual([2500, 2500])
+      expect(periodRangeLabel.value).toBe('novembre 2025 à octobre 2026')
     })
 
     it('should compute totalExpenses from summary', async () => {
@@ -224,45 +213,6 @@ describe('useDashboardData', () => {
       expect(totalIncome.value).toBe(5000)
     })
 
-    it('reads the savings as income less expenses, the server first', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue({
-        ...mockSummary,
-        savings: 4034.5,
-      })
-      const fromServer = useDashboardData()
-      await fromServer.fetchData()
-      expect(fromServer.savings.value).toBe(4034.5)
-
-      // An older server without the field: the same definition, locally.
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      const local = useDashboardData()
-      await local.fetchData()
-      expect(local.savings.value).toBe(4034.5)
-    })
-
-    it('should compute expensesByCategory from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, expensesByCategory } = useDashboardData()
-      await fetchData()
-
-      expect(expensesByCategory.value.labels).toEqual([
-        'Logement',
-        'Alimentation',
-      ])
-      expect(expensesByCategory.value.values).toEqual([800, 165.5])
-    })
-
-    it('should compute incomeByCategory from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, incomeByCategory } = useDashboardData()
-      await fetchData()
-
-      expect(incomeByCategory.value.labels).toEqual(['Salaires'])
-      expect(incomeByCategory.value.values).toEqual([5000])
-    })
-
     it('should return all expense categories from summary', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
@@ -273,104 +223,6 @@ describe('useDashboardData', () => {
         'Alimentation',
         'Logement',
       ])
-    })
-
-    it('should return all income categories from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, allIncomeCategories } = useDashboardData()
-      await fetchData()
-
-      expect(allIncomeCategories.value.map(c => c.name)).toEqual(['Salaires'])
-    })
-  })
-
-  describe('income drill-down', () => {
-    const mockIncomeTransactions: TransactionDto[] = [
-      {
-        id: '3',
-        date: '2024-01-25T00:00:00.000Z',
-        description: 'Salaire',
-        amount: 2500.0,
-        type: 'INCOME',
-        accountId: 'Compte Courant',
-        account: 'Compte Courant',
-        categoryId: 'cat-Salaires',
-        categoryName: 'Salaires',
-        isPointed: true,
-        createdAt: '2024-01-25T00:00:00.000Z',
-      },
-      {
-        id: '5',
-        date: '2024-02-25T00:00:00.000Z',
-        description: 'Salaire',
-        amount: 2500.0,
-        type: 'INCOME',
-        accountId: 'Compte Courant',
-        account: 'Compte Courant',
-        categoryId: 'cat-Salaires',
-        categoryName: 'Salaires',
-        isPointed: true,
-        createdAt: '2024-02-25T00:00:00.000Z',
-      },
-    ]
-
-    it('should return overall income when no category is selected', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, filteredIncomeByMonth, selectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      expect(selectedIncomeCategory.value).toBeNull()
-      expect(filteredIncomeByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
-    })
-
-    it('shows the selected income category monthly series', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      setSelectedIncomeCategory('cat-Salaires')
-
-      expect(filteredIncomeByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
-    })
-
-    it('should update selected income category', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockIncomeTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, selectedIncomeCategory, setSelectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      expect(selectedIncomeCategory.value).toBeNull()
-
-      await setSelectedIncomeCategory('cat-Salaires')
-      expect(selectedIncomeCategory.value).toBe('cat-Salaires')
-
-      await setSelectedIncomeCategory(null)
-      expect(selectedIncomeCategory.value).toBeNull()
     })
   })
 
@@ -446,38 +298,15 @@ describe('useDashboardData', () => {
     }
 
     it('sums the everyday share across categories', async () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
 
-      const { fetchData, totalEverydayExpenses, totalExceptionalExpenses } =
+      const { fetchData, displayedTotalExpenses, hasExceptionalExpenses } =
         useDashboardData()
       await fetchData()
 
-      expect(totalEverydayExpenses.value).toBe(1600)
-      expect(totalExceptionalExpenses.value).toBe(600)
-    })
-
-    it('uses the same divisor as the real average', async () => {
-      // The regression: dividing the everyday total by a shrunken number of
-      // "everyday months" moved figures that carried no event at all.
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
-
-      const {
-        fetchData,
-        averageMonthlyExpenses,
-        averageEverydayMonthlyExpenses,
-        periodMonths,
-      } = useDashboardData()
-      await fetchData()
-
-      expect(periodMonths.value).toBe(2)
-      expect(averageMonthlyExpenses.value).toBe(1100) // 2200 / 2
-      expect(averageEverydayMonthlyExpenses.value).toBe(800) // 1600 / 2
-
-      // The gap between both figures is exactly the exceptional spending.
-      const gap =
-        (averageMonthlyExpenses.value - averageEverydayMonthlyExpenses.value) *
-        periodMonths.value
-      expect(gap).toBeCloseTo(totalExceptionalOf(summaryWithEvents), 2)
+      expect(displayedTotalExpenses.value).toBe(1600)
+      expect(hasExceptionalExpenses.value).toBe(true)
     })
 
     it('exposes the events of the period', async () => {
@@ -500,20 +329,14 @@ describe('useDashboardData', () => {
         fetchData,
         breakdownMode,
         setBreakdownMode,
-        displayedAverageMonthlyExpenses,
         displayedTotalExpenses,
-        averageExceptionalMonthlyExpenses,
       } = useDashboardData()
       await fetchData()
 
       expect(breakdownMode.value).toBe('everyday')
-      // 1600 everyday over 2 months.
-      expect(displayedAverageMonthlyExpenses.value).toBe(800)
       expect(displayedTotalExpenses.value).toBe(1600)
-      expect(averageExceptionalMonthlyExpenses.value).toBe(300)
 
       setBreakdownMode('real')
-      expect(displayedAverageMonthlyExpenses.value).toBe(1100)
       expect(displayedTotalExpenses.value).toBe(2200)
       expect(localStorage.setItem).toHaveBeenCalledWith(
         'dashboard-breakdown-mode',
@@ -528,6 +351,14 @@ describe('useDashboardData', () => {
     it('reports no exceptional spending when there is none', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...summaryWithEvents,
+        // The averages read the months: they say no event either.
+        monthlyData: summaryWithEvents.monthlyData.map(m => ({
+          ...m,
+          expenses: 800,
+          netExpenses: 800,
+          exceptionalExpenses: 0,
+          everydayNetExpenses: 800,
+        })),
         expensesByCategory: [
           {
             categoryId: 'cat-Logement',
@@ -542,19 +373,20 @@ describe('useDashboardData', () => {
         exceptionalEvents: [],
       })
 
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
       const {
         fetchData,
         hasExceptionalExpenses,
-        averageMonthlyExpenses,
-        averageEverydayMonthlyExpenses,
+        displayedTotalExpenses,
+        setBreakdownMode,
       } = useDashboardData()
       await fetchData()
 
       expect(hasExceptionalExpenses.value).toBe(false)
-      // With no event, both averages must be strictly identical.
-      expect(averageEverydayMonthlyExpenses.value).toBe(
-        averageMonthlyExpenses.value
-      )
+      // With no event, both readings are strictly identical.
+      expect(displayedTotalExpenses.value).toBe(1600)
+      setBreakdownMode('real')
+      expect(displayedTotalExpenses.value).toBe(1600)
     })
 
     it('falls back to the real amounts when the everyday share is absent', async () => {
@@ -576,10 +408,12 @@ describe('useDashboardData', () => {
         totalExceptionalExpenses: 0,
       })
 
-      const { fetchData, totalEverydayExpenses } = useDashboardData()
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
+      const { fetchData, displayedTotalExpenses } = useDashboardData()
       await fetchData()
 
-      expect(totalEverydayExpenses.value).toBe(2200)
+      // « Vie courante », read off the real amounts.
+      expect(displayedTotalExpenses.value).toBe(2200)
     })
   })
 })
@@ -679,21 +513,106 @@ describe('useDashboardData — smoothed purchases', () => {
       'Logement',
     ])
   })
+})
 
-  it('reads the events from their own total, not the gap of the readings', async () => {
+describe('useDashboardData — the closed months', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(localStorage.getItem).mockReturnValue(null)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 23, 12))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const month = (
+    key: string,
+    netExpenses: number,
+    income: number,
+    exceptionalExpenses = 0
+  ) => ({
+    month: key,
+    label: key,
+    expenses: netExpenses,
+    netExpenses,
+    income,
+    exceptionalExpenses,
+    everydayNetExpenses: netExpenses - exceptionalExpenses,
+  })
+
+  /** August and September closed; October on its 23rd. */
+  const summary: DashboardSummaryDto = {
+    monthlyData: [
+      month('2026-08', 1000, 2500, 200),
+      month('2026-09', 1200, 2500),
+      month('2026-10', 400, 0),
+    ],
+    expensesByCategory: [
+      {
+        categoryId: 'cat-a',
+        category: 'A',
+        amount: 2600,
+        everydayAmount: 2400,
+      },
+    ],
+    incomeByCategory: [],
+    totalExpenses: 2600,
+    totalIncome: 5000,
+    allExpenseCategories: [],
+    allIncomeCategories: [],
+    availableAccounts: [],
+    periodMonths: 2,
+    monthLabels: ['2026-08', '2026-09', '2026-10'],
+    totalExceptionalExpenses: 200,
+    exceptionalEvents: [],
+  }
+
+  it('reads periodMonths from the server, not the months it draws', async () => {
     vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
     const data = useDashboardData()
     await data.fetchData()
 
-    // 600 over the three everyday months — not (3400 − 1900) / 3.
-    expect(data.averageExceptionalMonthlyExpenses.value).toBe(200)
+    expect(data.monthlyData.value).toHaveLength(3)
+    expect(data.periodMonths.value).toBe(2)
+    expect(data.averagesReadClosedMonths.value).toBe(true)
+  })
+
+  it('leaves the current month out of every average', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.averageMonthlyExpenses.value).toBe(1100)
+    expect(data.averageMonthlyIncome.value).toBe(2500)
+    expect(data.averageMonthlySavings.value).toBe(1400)
+  })
+
+  it('averages the current month alone over 1, and says so', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue({
+      ...summary,
+      monthlyData: [month('2026-10', 400, 1000)],
+      totalExpenses: 400,
+      totalIncome: 1000,
+      periodMonths: 1,
+      monthLabels: ['2026-10'],
+    })
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.periodMonths.value).toBe(1)
+    expect(data.averageMonthlyExpenses.value).toBe(400)
+    expect(data.averagesReadClosedMonths.value).toBe(false)
+  })
+
+  it('divides by the months drawn on a server without the field', async () => {
+    const { periodMonths: _omitted, ...older } = summary
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(older)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.periodMonths.value).toBe(3)
+    expect(data.averageMonthlyExpenses.value).toBe(866.67)
   })
 })
-
-/** Total exceptional spending declared by a summary fixture. */
-function totalExceptionalOf(summary: DashboardSummaryDto): number {
-  return summary.expensesByCategory.reduce(
-    (acc, c) => acc + (c.exceptionalAmount ?? 0),
-    0
-  )
-}

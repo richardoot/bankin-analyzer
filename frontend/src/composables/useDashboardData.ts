@@ -7,6 +7,7 @@ import {
 import { useFiltersStore } from '@/stores/filters'
 import { useAccountsStore } from '@/stores/accounts'
 import { isAmortizationCarrier } from '@/lib/amortization'
+import { formatMonthRange } from '@/lib/formatters'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -14,11 +15,10 @@ export interface MonthlyData {
   expenses: number // dépenses brutes (valeur absolue)
   netExpenses: number // dépenses nettes (après déduction des remboursements)
   income: number // somme des revenus
-}
-
-export interface ChartData {
-  labels: string[]
-  values: number[]
+  /** The events' share of the month's expenses. */
+  exceptionalExpenses: number
+  /** netExpenses without the events, smoothed purchases sliced. */
+  everydayNetExpenses: number
 }
 
 /**
@@ -44,7 +44,7 @@ export function useDashboardData() {
   const accountsStore = useAccountsStore()
 
   /**
-   * One reading for the whole page — the expenses KPI, the
+   * One reading for the whole page — the month band, the
    * structure card and the category list follow it together. Persisted:
    * it is a way of looking at the figures, not a question of the moment.
    * Defaults to « Vie courante », as the budget does: a holiday must not
@@ -68,7 +68,6 @@ export function useDashboardData() {
 
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const selectedIncomeCategory = ref<string | null>(null)
 
   // Reimbursement toggles. Received reimbursements are a reading of the
   // screen; a debt still owed is a preference shared with the budget, kept
@@ -109,63 +108,101 @@ export function useDashboardData() {
     )
   )
 
-  const expensesByMonth = computed<ChartData>(() => ({
-    labels: monthlyData.value.map(d => d.label),
-    values: monthlyData.value.map(d => d.netExpenses),
-  }))
-
-  const incomeByMonth = computed<ChartData>(() => ({
-    labels: monthlyData.value.map(d => d.label),
-    values: monthlyData.value.map(d => d.income),
-  }))
-
   const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
   const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
 
-  // The structure of spending and the savings reading, straight from the
-  // server; absent on an older server, so every consumer guards for it.
+  // The structure of spending, straight from the server; absent on an
+  // older server, so every consumer guards for it.
   const spendingStructure = computed(
     () => summaryData.value?.spendingStructure ?? null
   )
   const everydaySpendingStructure = computed(
     () => summaryData.value?.everydaySpendingStructure ?? null
   )
-  // What the period kept: income less every expense, the server's figure.
-  const savings = computed(
-    () =>
-      summaryData.value?.savings ??
-      Math.round((totalIncome.value - totalExpenses.value) * 100) / 100
-  )
-  // Where some of it went: informational, it carries no rate.
-  const savingsTransfers = computed(
-    () => summaryData.value?.savingsTransfers ?? 0
-  )
-  const savingsRate = computed(() => summaryData.value?.savingsRate ?? null)
-  const remainingToLive = computed(
-    () => summaryData.value?.remainingToLive ?? null
-  )
   const pendingReceivables = computed(
     () => summaryData.value?.pendingReceivables ?? 0
   )
-  // The tag families over the current calendar year, whatever the period.
+  // The tag families over the current calendar year, whatever the period:
+  // the « Épisodes » line names them; their card is on the Tags page.
   const tagFamiliesOfYear = computed(
     () => summaryData.value?.tagFamiliesOfYear ?? []
   )
-  const realExpensesOfYear = computed(
-    () => summaryData.value?.realExpensesOfYear ?? null
+  // What the unfolded lines of « Où part l'argent » read: each structure
+  // segment by category and its share month by month, on both readings, and
+  // the events by category. Absent on an older server.
+  const structureBreakdown = computed(
+    () => summaryData.value?.structureBreakdown ?? null
   )
-  const exceptionalExpensesOfYear = computed(
-    () => summaryData.value?.exceptionalExpensesOfYear ?? null
+  const structureShareByMonth = computed(
+    () => summaryData.value?.structureShareByMonth ?? null
+  )
+  const exceptionalByCategory = computed(
+    () => summaryData.value?.exceptionalByCategory ?? []
   )
 
-  // Number of months in the period (used for averages)
-  const periodMonths = computed(() => monthlyData.value.length || 1)
+  /**
+   * The months the averages read, and their number: the server's
+   * `periodMonths`, the closed months of the period. The current month is
+   * drawn on every chart but averaged nowhere — half a month is not a
+   * month. They are the first `periodMonths` of `monthLabels` (the current
+   * month and any after it come last); a period of the current month alone
+   * averages it over 1. An older server without the field: every month.
+   */
+  const averagedMonths = computed<Set<string> | null>(() => {
+    const labels = summaryData.value?.monthLabels
+    const closed = summaryData.value?.periodMonths
+    if (!labels || closed === undefined) return null
+    return new Set(labels.length > closed ? labels.slice(0, closed) : labels)
+  })
 
-  const averageMonthlyExpenses = computed(
-    () => Math.round((totalExpenses.value / periodMonths.value) * 100) / 100
+  /**
+   * The divisor. The real reading leaves out a month only smoothed slices
+   * reach, as `monthlyData` does: it divides exactly as it did before the
+   * smoothing.
+   */
+  const periodMonths = computed(() => {
+    const closed = summaryData.value?.periodMonths
+    if (closed === undefined) return monthlyData.value.length || 1
+    if (breakdownMode.value === 'everyday') return closed
+    const slicesOnly = (summaryData.value?.monthlyData ?? []).filter(
+      m =>
+        (averagedMonths.value?.has(m.month) ?? false) &&
+        m.amortizedExpenses !== undefined &&
+        m.expenses === 0 &&
+        m.income === 0 &&
+        m.netExpenses === 0
+    ).length
+    return Math.max(1, closed - slicesOnly)
+  })
+  /** Whether the averages read closed months, or the current month alone. */
+  const averagesReadClosedMonths = computed(() => {
+    const labels = summaryData.value?.monthLabels ?? []
+    const last = labels[Math.min(periodMonths.value, labels.length) - 1]
+    if (!last) return true
+    const now = new Date()
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return last < current
+  })
+
+  /** A month series summed over the averaged months, then per month. */
+  function averageOf(
+    pick: (m: DashboardSummaryDto['monthlyData'][number]) => number,
+    total: number
+  ): number {
+    const months = averagedMonths.value
+    const sum = months
+      ? (summaryData.value?.monthlyData ?? [])
+          .filter(m => months.has(m.month))
+          .reduce((acc, m) => acc + pick(m), 0)
+      : total
+    return Math.round((sum / periodMonths.value) * 100) / 100
+  }
+
+  const averageMonthlyExpenses = computed(() =>
+    averageOf(m => m.netExpenses, totalExpenses.value)
   )
-  const averageMonthlyIncome = computed(
-    () => Math.round((totalIncome.value / periodMonths.value) * 100) / 100
+  const averageMonthlyIncome = computed(() =>
+    averageOf(m => m.income, totalIncome.value)
   )
   const averageMonthlySavings = computed(
     () =>
@@ -196,13 +233,6 @@ export function useDashboardData() {
     return Math.round(sum * 100) / 100
   })
 
-  // Same divisor as averageMonthlyExpenses, so the gap between the two figures
-  // is exactly the exceptional spending and nothing else.
-  const averageEverydayMonthlyExpenses = computed(
-    () =>
-      Math.round((totalEverydayExpenses.value / periodMonths.value) * 100) / 100
-  )
-
   const hasExceptionalExpenses = computed(
     () => totalExceptionalExpenses.value > 0
   )
@@ -214,54 +244,6 @@ export function useDashboardData() {
   const displayedTotalExpenses = computed(() =>
     isEverydayMode.value ? totalEverydayExpenses.value : totalExpenses.value
   )
-  const displayedAverageMonthlyExpenses = computed(() =>
-    isEverydayMode.value
-      ? averageEverydayMonthlyExpenses.value
-      : averageMonthlyExpenses.value
-  )
-  /**
-   * The events, per month. Read from their own total: the everyday reading
-   * also spreads smoothed purchases, so the gap between the two readings is
-   * no longer the events alone once one is smoothed.
-   */
-  const averageExceptionalMonthlyExpenses = computed(() =>
-    hasAmortizedExpenses.value
-      ? Math.round(
-          (totalExceptionalExpenses.value / periodMonths.value) * 100
-        ) / 100
-      : Math.round(
-          (averageMonthlyExpenses.value -
-            averageEverydayMonthlyExpenses.value) *
-            100
-        ) / 100
-  )
-
-  // Per-month series for sparklines
-  const expensesSparkline = computed(() =>
-    monthlyData.value.map(d => d.netExpenses)
-  )
-  const incomeSparkline = computed(() => monthlyData.value.map(d => d.income))
-  const savingsSparkline = computed(() =>
-    monthlyData.value.map(
-      d => Math.round((d.income - d.netExpenses) * 100) / 100
-    )
-  )
-
-  const expensesByCategory = computed<ChartData>(() => {
-    const data = summaryData.value?.expensesByCategory ?? []
-    return {
-      labels: data.map(d => d.category),
-      values: data.map(d => d.amount),
-    }
-  })
-
-  const incomeByCategory = computed<ChartData>(() => {
-    const data = summaryData.value?.incomeByCategory ?? []
-    return {
-      labels: data.map(d => d.category),
-      values: data.map(d => d.amount),
-    }
-  })
 
   // Detailed category breakdown (with monthlyAmounts, subcategories, etc.)
   // The real reading leaves out a category only slices reach.
@@ -276,77 +258,29 @@ export function useDashboardData() {
   )
   const monthLabels = computed(() => summaryData.value?.monthLabels ?? [])
 
+  /**
+   * The period in months, for the heading of « Où part l'argent »:
+   * « novembre 2025 à octobre 2026 ». Read off the months the summary
+   * covers, so it names what the figures are; before any answer, off the
+   * selected range. Null when neither says (an unbounded period not
+   * loaded yet).
+   */
+  const periodRangeLabel = computed<string | null>(() => {
+    const labels = monthLabels.value
+    let first: string | null | undefined = labels[0]
+    let last: string | null | undefined = labels.at(-1)
+    if (!first || !last) {
+      const range = filtersStore.getDateRangeFromPeriod(filtersStore.timePeriod)
+      first = range.startDate
+      last = range.endDate
+    }
+    return first && last ? formatMonthRange(first, last) : null
+  })
+
   // Every expense category the period carries, each with its id
   const allExpenseCategories = computed<CategoryOptionDto[]>(
     () => summaryData.value?.allExpenseCategories ?? []
   )
-
-  // Every income category the period carries. Those linked to an expense
-  // category used to be filtered out here, because the server excluded them
-  // from income wholesale. It no longer does: a transfer is now netted by the
-  // cash it actually paid back, so a mixed one — salary plus a refund — still
-  // reports its salary, and hiding the category would hide real income.
-  const allIncomeCategories = computed<CategoryOptionDto[]>(
-    () => summaryData.value?.allIncomeCategories ?? []
-  )
-
-  /**
-   * The server's per-category monthly series, keyed by month.
-   *
-   * `monthlyAmounts` is aligned with `monthLabels`, which spans the whole
-   * requested period, while the chart axis follows `monthlyData` — the months
-   * that actually carry something. Going through a map rather than a shared
-   * index keeps the two from silently drifting apart.
-   */
-  function monthlySeriesOf(
-    categories: { categoryId: string; monthlyAmounts?: number[] }[],
-    categoryId: string
-  ): ChartData {
-    const category = categories.find(c => c.categoryId === categoryId)
-    const labels = monthLabels.value
-    const byMonth = new Map<string, number>(
-      (category?.monthlyAmounts ?? []).map((amount, index) => [
-        labels[index] ?? String(index),
-        amount,
-      ])
-    )
-
-    // The axis carries its own formatted label already; reusing it keeps the
-    // drill-down chart aligned with the overview above it.
-    return {
-      labels: monthlyData.value.map(d => d.label),
-      values: monthlyData.value.map(d => byMonth.get(d.month) ?? 0),
-    }
-  }
-
-  // The income drill-down chart reads the series the server already computed.
-  // (The expenses chart lost its selector: each expanded category row draws
-  // its own monthly chart.)
-  //
-  // Drill-down charts used to be recalculated here from every transaction of the account,
-  // which meant the chart and the category breakdown right next to it applied
-  // *different* rules: this one deducted a refund in the month it was received,
-  // through the category association, while the server now nets it against the
-  // expense it repays. Same screen, two answers. Reading the server's own
-  // figures makes them agree by construction — and drops the full paginated
-  // transaction fetch that existed only to feed this.
-  const filteredIncomeByMonth = computed<ChartData>(() => {
-    if (!selectedIncomeCategory.value) {
-      return incomeByMonth.value
-    }
-    return monthlySeriesOf(
-      incomeCategoriesDetailed.value,
-      selectedIncomeCategory.value
-    )
-  })
-
-  // Selecting a category no longer fetches anything: the summary already
-  // carries its monthly series. What used to happen here was a full paginated
-  // walk of every transaction on the account, on the first drill-down, purely
-  // to redraw a chart the server had already computed.
-  function setSelectedIncomeCategory(category: string | null): void {
-    selectedIncomeCategory.value = category
-  }
 
   async function fetchData() {
     isLoading.value = true
@@ -417,49 +351,32 @@ export function useDashboardData() {
     breakdownMode,
     setBreakdownMode,
     displayedTotalExpenses,
-    displayedAverageMonthlyExpenses,
-    averageExceptionalMonthlyExpenses,
     pendingPreferenceSyncError,
     monthlyData,
-    expensesByMonth,
-    incomeByMonth,
     totalExpenses,
     totalIncome,
     periodMonths,
+    averagesReadClosedMonths,
     averageMonthlyExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,
-    totalExceptionalExpenses,
-    totalEverydayExpenses,
-    averageEverydayMonthlyExpenses,
     exceptionalEvents,
     hasExceptionalExpenses,
     hasAmortizedExpenses,
-    expensesSparkline,
-    incomeSparkline,
-    savingsSparkline,
-    expensesByCategory,
-    incomeByCategory,
     expenseCategoriesDetailed,
     incomeCategoriesDetailed,
     monthLabels,
+    periodRangeLabel,
     allExpenseCategories,
-    allIncomeCategories,
-    selectedIncomeCategory,
-    filteredIncomeByMonth,
-    setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,
     spendingStructure,
     everydaySpendingStructure,
-    savings,
-    savingsTransfers,
     pendingReceivables,
-    savingsRate,
-    remainingToLive,
     tagFamiliesOfYear,
-    realExpensesOfYear,
-    exceptionalExpensesOfYear,
+    structureBreakdown,
+    structureShareByMonth,
+    exceptionalByCategory,
     isLoading,
     error,
     fetchData,

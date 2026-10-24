@@ -11,7 +11,7 @@
   const periods: SegmentedOption<TimePeriod>[] = [
     { value: '3m', label: '3 mois', shortLabel: '3M', testId: 'period-3m' },
     { value: '6m', label: '6 mois', shortLabel: '6M', testId: 'period-6m' },
-    { value: '1y', label: '1 an', shortLabel: '1A', testId: 'period-1y' },
+    { value: '1y', label: '12 mois', shortLabel: '12M', testId: 'period-1y' },
     { value: 'all', label: 'Tout', testId: 'period-all' },
     {
       value: 'custom',

@@ -192,7 +192,7 @@ describe('TagFamiliesOfYearCard', () => {
     )
     expect(
       wrapper.get('[data-testid="family-of-year-spent-fam-hyrox"]').classes()
-    ).not.toContain('text-red-600')
+    ).toContain('text-gray-900')
   })
 
   it('averages the past years that spent, and says nothing of an envelope it lacks', async () => {
@@ -208,12 +208,12 @@ describe('TagFamiliesOfYearCard', () => {
     expect(details).not.toContain('reste')
   })
 
-  it('turns red on an overrun and says it in words', async () => {
+  it('keeps the figure in ink on an overrun and says it in words, in amber', async () => {
     const wrapper = await mountCard()
 
-    expect(
-      wrapper.get('[data-testid="family-of-year-spent-fam-travel"]').classes()
-    ).toContain('text-red-600')
+    const spent = wrapper.get('[data-testid="family-of-year-spent-fam-travel"]')
+    expect(spent.classes()).toContain('text-gray-900')
+    expect(wrapper.html()).not.toMatch(/text-red-/)
     const details = wrapper.get(
       '[data-testid="family-of-year-details-fam-travel"]'
     )
@@ -221,7 +221,9 @@ describe('TagFamiliesOfYearCard', () => {
     expect(text(details.text())).toMatch(
       /^50 % de l'exceptionnel · 2 étiquettes · 5 transactions · 1\s000\s€ par an jusqu'ici · dépassement de 250,50\s€ sur 1\s000\s€ par an$/
     )
-    expect(details.get('.text-red-600').text()).toMatch(/dépassement de 250,50/)
+    expect(details.get('.text-amber-700').text()).toMatch(
+      /dépassement de 250,50/
+    )
     expect(details.text()).not.toContain('reste')
   })
 

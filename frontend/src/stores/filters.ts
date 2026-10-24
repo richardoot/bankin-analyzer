@@ -13,9 +13,27 @@ const LEGACY_STORAGE_KEYS = [
 
 export type TimePeriod = '3m' | '6m' | '1y' | 'all' | 'custom'
 
+/** « 12 mois »: the period a dashboard opens on until one is picked. */
+export const DEFAULT_TIME_PERIOD: TimePeriod = '1y'
+
+/** How many calendar months each rolling period spans, the current one included. */
+const ROLLING_MONTHS: Record<'3m' | '6m' | '1y', number> = {
+  '3m': 3,
+  '6m': 6,
+  '1y': 12,
+}
+
+/** A date as the user's calendar reads it, `YYYY-MM-DD`. */
+function localDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 export const useFiltersStore = defineStore('filters', () => {
   // === DASHBOARD FILTERS (localStorage only, NOT synced to DB) ===
-  const timePeriod = ref<TimePeriod>('all')
+  // Twelve months by default, not the whole history: the averages read a
+  // year of the user's life as it is now. A period the user picked before
+  // (kept in this browser) still wins.
+  const timePeriod = ref<TimePeriod>(DEFAULT_TIME_PERIOD)
   // Custom range — only used when timePeriod === 'custom'
   const customStartDate = ref<string | null>(null)
   const customEndDate = ref<string | null>(null)
@@ -171,24 +189,21 @@ export const useFiltersStore = defineStore('filters', () => {
       }
     }
 
+    // Whole calendar months, the current one included: « 12 mois » on the
+    // 24th of October 2026 runs from the 1st of November 2025 to today —
+    // eleven closed months and this one, which the averages leave out.
+    // Starting on the 24th of the year before, as it used to, opened the
+    // period on a partial month that read as a light one.
     const endDate = new Date()
-    const startDate = new Date()
-
-    switch (period) {
-      case '3m':
-        startDate.setMonth(startDate.getMonth() - 3)
-        break
-      case '6m':
-        startDate.setMonth(startDate.getMonth() - 6)
-        break
-      case '1y':
-        startDate.setFullYear(startDate.getFullYear() - 1)
-        break
-    }
+    const startDate = new Date(
+      endDate.getFullYear(),
+      endDate.getMonth() - (ROLLING_MONTHS[period] - 1),
+      1
+    )
 
     return {
-      startDate: startDate.toISOString().slice(0, 10),
-      endDate: endDate.toISOString().slice(0, 10),
+      startDate: localDay(startDate),
+      endDate: localDay(endDate),
     }
   }
 

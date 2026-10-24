@@ -68,7 +68,7 @@ export class SubcategoryDataDto {
   /** Number of transactions */
   transactionCount!: number
 
-  /** Average per month for the subcategory */
+  /** Average per month for the subcategory, over the closed months (`periodMonths`) */
   averagePerMonth!: number
 
   /**
@@ -101,7 +101,11 @@ export class CategoryDataDto {
   /** Number of transactions (only when includeCategoryBreakdown is true) */
   transactionCount?: number
 
-  /** Average per month (only when includeCategoryBreakdown is true) */
+  /**
+   * Average per month over the closed months of the period (see
+   * `DashboardSummaryDto.periodMonths`). Only when includeCategoryBreakdown
+   * is true.
+   */
   averagePerMonth?: number
 
   /** Per-month amounts in chronological order matching monthLabels (only when includeCategoryBreakdown is true) */
@@ -166,8 +170,110 @@ export class ExceptionalEventDto {
   color!: string | null
   icon!: string | null
 
+  /** The tag's family, null when it belongs to none. */
+  familyId!: string | null
+
+  /** That family's name, null without one. */
+  familyName!: string | null
+
+  /** That family's color, null without one or without a color. */
+  familyColor!: string | null
+
   /** Expenses tagged with this event inside the period, net as the totals are */
   amount!: number
+}
+
+/**
+ * One category of the period's exceptional expenses: what the events cost,
+ * read by where the money went rather than by event.
+ */
+export class ExceptionalCategoryDto {
+  /** Category id, or `UNCATEGORIZED_CATEGORY_ID` */
+  categoryId!: string
+  category!: string
+  icon!: string | null
+
+  /**
+   * The category's expenses carrying an exceptional tag over the period, net
+   * as the totals are: the categories' `exceptionalAmount`, so they sum to
+   * `totalExceptionalExpenses`.
+   */
+  amount!: number
+}
+
+/** One category inside one segment of the structure. */
+export class StructureCategoryDto {
+  /** Category id, or `UNCATEGORIZED_CATEGORY_ID` */
+  categoryId!: string
+  category!: string
+  icon!: string | null
+
+  /** The category's expenses in the segment over the period. */
+  amount!: number
+
+  /**
+   * The same per month, over the closed months (`periodMonths`), the
+   * current month left out as every other average.
+   */
+  averagePerMonth!: number
+}
+
+/**
+ * The four segments of the structure, each the categories it is made of,
+ * the heaviest first. A line falls in a segment by the summary's own rule —
+ * its nature is its subcategory's, else its category's default; its rhythm
+ * COMMITTED on a line of a recurrence, else its subcategory's, else its
+ * category's — so a segment's categories sum to the segment of
+ * `spendingStructure` (or `everydaySpendingStructure`). The rows with no
+ * attribute (« à migrer ») fall in none.
+ */
+export class StructureBreakdownDto {
+  @ApiProperty({ type: [StructureCategoryDto] })
+  essential!: StructureCategoryDto[]
+
+  @ApiProperty({ type: [StructureCategoryDto] })
+  pleasure!: StructureCategoryDto[]
+
+  @ApiProperty({ type: [StructureCategoryDto] })
+  committed!: StructureCategoryDto[]
+
+  @ApiProperty({ type: [StructureCategoryDto] })
+  variable!: StructureCategoryDto[]
+}
+
+/** The breakdown on both readings, as the two structures are. */
+export class StructureBreakdownReadingsDto {
+  /** The lifestyle: events set aside, smoothed purchases by their slices. */
+  everyday!: StructureBreakdownDto
+
+  /** The period as it was: every expense, events included. */
+  real!: StructureBreakdownDto
+}
+
+/**
+ * Each segment's share of the month's spending, in percent to the tenth,
+ * aligned on `monthLabels`: the segment over the month's total on the same
+ * reading, unknown rows in the total — the series the share trend reads
+ * (trend.detection.ts, trend 4). Null on a month with nothing spent.
+ */
+export class StructureShareDto {
+  @ApiProperty({ type: [Number], nullable: true })
+  essential!: (number | null)[]
+
+  @ApiProperty({ type: [Number], nullable: true })
+  pleasure!: (number | null)[]
+
+  @ApiProperty({ type: [Number], nullable: true })
+  committed!: (number | null)[]
+
+  @ApiProperty({ type: [Number], nullable: true })
+  variable!: (number | null)[]
+}
+
+/** The shares on both readings. */
+export class StructureShareReadingsDto {
+  everyday!: StructureShareDto
+  real!: StructureShareDto
 }
 
 /**
@@ -272,7 +378,15 @@ export class DashboardSummaryDto {
   @ApiProperty({ type: [String] })
   availableAccounts!: string[]
 
-  /** Number of months in the period (only when includeCategoryBreakdown is true) */
+  /**
+   * The divisor of every `averagePerMonth` and `everydayAveragePerMonth`:
+   * the months of the period before the current month (in Paris), at least
+   * 1. The current month — and any after it a custom period reaches — stays
+   * in `monthlyData` and `monthlyAmounts` but out of the averages, numerator
+   * and divisor alike: half a month is not a month. A period made of the
+   * current month alone averages it over 1. Only when
+   * includeCategoryBreakdown is true.
+   */
   periodMonths?: number
 
   /** Month labels matching CategoryDataDto.monthlyAmounts indexes (only when includeCategoryBreakdown is true) */
@@ -355,4 +469,26 @@ export class DashboardSummaryDto {
    * `totalIncome − everydaySpendingStructure.committed`. Null without income.
    */
   remainingToLive!: number | null
+
+  /**
+   * The categories each segment of the structure is made of, on both
+   * readings: what an unfolded structure line lists. Only when
+   * includeCategoryBreakdown is true.
+   */
+  structureBreakdown?: StructureBreakdownReadingsDto
+
+  /**
+   * Each segment's share of every month of `monthLabels`, on both readings:
+   * what an unfolded structure line draws. Only when
+   * includeCategoryBreakdown is true.
+   */
+  structureShareByMonth?: StructureShareReadingsDto
+
+  /**
+   * The period's exceptional expenses by category, the heaviest first: the
+   * foot of the unfolded events line. Only when includeCategoryBreakdown is
+   * true.
+   */
+  @ApiProperty({ type: [ExceptionalCategoryDto], required: false })
+  exceptionalByCategory?: ExceptionalCategoryDto[]
 }

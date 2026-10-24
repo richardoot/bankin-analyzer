@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
+  import { STATE_COLORS } from '@/lib/stateTints'
 
   /**
    * A family's years side by side, one column each, on the family's own
@@ -41,7 +42,8 @@
   const LABELS = 16
   /** A year at 0 keeps a sliver, so it still reads as a year. */
   const MIN_HEIGHT = 2
-  const OVER_COLOR = '#ef4444' // red-500
+  /** An overrun is a state, never a reproach: amber, not red. */
+  const OVER_COLOR = STATE_COLORS.over
 
   const width = computed(() => props.years.length * STEP - 12)
   const top = computed(() =>

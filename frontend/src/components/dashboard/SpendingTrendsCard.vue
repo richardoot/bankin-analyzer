@@ -1,12 +1,16 @@
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, ref } from 'vue'
+  import { computed, nextTick, onMounted, ref, watch } from 'vue'
   import { RouterLink } from 'vue-router'
-  import type { TrendReading, TrendWindow } from '@/lib/api'
+  import type { TrendReading, TrendWindow, TrendsResponseDto } from '@/lib/api'
   import {
     useSpendingTrends,
     type TrendTab,
   } from '@/composables/useSpendingTrends'
-  import { modelName, useTrendDigest } from '@/composables/useTrendDigest'
+  import {
+    modelName,
+    rememberedTrendDigest,
+    useTrendDigest,
+  } from '@/composables/useTrendDigest'
   import { TREND_WINDOWS, trendMonthLink } from '@/lib/trends'
   import { formatDate, formatMonth } from '@/lib/formatters'
   import BaseCard from '@/components/ui/BaseCard.vue'
@@ -28,6 +32,13 @@
    * links behind « Détails ». The lines to file are an alert beside the
    * tabs, not a trend. The paragraph Claude writes is folded behind « Lire
    * le résumé du mois », and asked only when unfolded.
+   *
+   * `compact` is the dashboard's reading (agent-os/product/dashboard-refonte.md,
+   * lot 2): the month and its window in the title, a link to the trends
+   * page with their count, the lead sentence, the three largest gaps. The
+   * lines to file are « À faire »'s (lot 3), not this card's. No selector, no tab, no
+   * « Voir par groupe », no paragraph to unfold, no horizons, no scope note:
+   * the full card lives on /trends.
    */
   const props = defineProps<{
     reading: TrendReading
@@ -35,7 +46,14 @@
     deductPendingReimbursements: boolean
     /** Category names by id, for a subcategory tile's parent; optional. */
     categoryNames?: Record<string, string> | undefined
+    /** The dashboard's short reading; the full card otherwise. */
+    compact?: boolean | undefined
   }>()
+  /**
+   * The trends as loaded, for the page around the card: the dashboard
+   * composes « À faire » from them without a second request.
+   */
+  const emit = defineEmits<{ loaded: [data: TrendsResponseDto | null] }>()
 
   const {
     data,
@@ -65,6 +83,9 @@
   onMounted(() => {
     void fetchTrends()
   })
+
+  // The trends as loaded, handed to the page around the card.
+  watch(data, value => emit('loaded', value), { immediate: true })
 
   // The written paragraph (lot 5): folded, and asked at its first unfolding.
   const {
@@ -186,6 +207,69 @@
   })
 
   const showSkeleton = computed(() => !data.value && isLoading.value)
+
+  /* ---------------------------------------------------------------- */
+  /* The compact reading (the dashboard)                               */
+  /* ---------------------------------------------------------------- */
+
+  /** How many tiles the dashboard shows: the largest gaps, by score. */
+  const COMPACT_SHOWN = 3
+
+  /** The three largest gaps, the lines to file left out. */
+  const compactInsights = computed(() => habits.value.slice(0, COMPACT_SHOWN))
+
+  /** « septembre, contre les 6 mois précédents »; the month alone on a short history. */
+  const compactHeading = computed(() => {
+    if (!data.value) return null
+    const month = formatMonth(`${data.value.month}-01`, {
+      style: 'long',
+      year: false,
+      capitalize: false,
+    })
+    return missingMonths.value === 0
+      ? `${month}, contre les ${data.value.window} mois précédents`
+      : month
+  })
+
+  /** « Les 16 tendances → », « 1 tendance → »; nothing to open when none moved. */
+  const allTrendsLabel = computed(() => {
+    const n = habits.value.length
+    if (missingMonths.value > 0 || n === 0) return null
+    return n >= 2 ? `Les ${n} tendances` : '1 tendance'
+  })
+
+  /**
+   * A phone shows two tiles, not three (agent-os/product/dashboard-refonte.md,
+   * lot 7): the third stays in the page, hidden below `sm`, and the link says
+   * what is left — « 14 autres tendances → ». With nothing left out it keeps
+   * the desktop label.
+   */
+  const PHONE_SHOWN = 2
+
+  const phoneTrendsLabel = computed(() => {
+    if (!allTrendsLabel.value) return null
+    const rest =
+      habits.value.length - Math.min(PHONE_SHOWN, compactInsights.value.length)
+    if (rest <= 0) return allTrendsLabel.value
+    return rest >= 2 ? `${rest} autres tendances` : '1 autre tendance'
+  })
+
+  /**
+   * The paragraph Claude wrote for this very view, when the trends page
+   * already read it in this session and its figures still hold: the best
+   * sentence of the page. Never asked from here.
+   */
+  const compactDigest = computed(() => {
+    if (!props.compact || !data.value) return null
+    const remembered = rememberedTrendDigest({
+      month: data.value.month,
+      reading: data.value.reading,
+      window: referenceWindow.value,
+      deductReimbursements: props.deductReimbursements,
+      deductPendingReimbursements: props.deductPendingReimbursements,
+    })
+    return remembered && !remembered.stale ? remembered : null
+  })
 </script>
 
 <template>
@@ -194,7 +278,41 @@
     data-testid="spending-trends"
     aria-labelledby="spending-trends-title"
   >
+    <!-- The dashboard's reading: one line of title, the way to the page. -->
     <div
+      v-if="compact"
+      class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
+    >
+      <h2
+        id="spending-trends-title"
+        class="min-w-0 text-lg font-semibold text-gray-900 dark:text-gray-100"
+      >
+        Ce qui change<span
+          v-if="compactHeading"
+          class="font-normal text-gray-600 dark:text-gray-300"
+          data-testid="trends-heading"
+        >
+          · {{ compactHeading }}</span
+        >
+      </h2>
+      <RouterLink
+        v-if="allTrendsLabel"
+        to="/trends"
+        class="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded text-sm font-medium text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-0 dark:text-primary-400"
+        data-testid="trends-all-link"
+      >
+        <span class="sm:hidden" data-testid="trends-all-link-phone">{{
+          phoneTrendsLabel
+        }}</span
+        ><span class="hidden sm:inline" data-testid="trends-all-link-desk">{{
+          allTrendsLabel
+        }}</span>
+        <span aria-hidden="true">→</span>
+      </RouterLink>
+    </div>
+
+    <div
+      v-else
       class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
     >
       <div class="min-w-0">
@@ -275,8 +393,72 @@
       </button>
     </p>
 
+    <!-- The dashboard's reading: the lead sentence, three tiles, nothing else. -->
     <div
-      v-if="data"
+      v-if="compact && data"
+      class="transition-opacity duration-200"
+      :class="isLoading ? 'opacity-60' : 'opacity-100'"
+      :aria-busy="isLoading"
+    >
+      <p
+        v-if="missingMonths > 0"
+        class="text-sm text-gray-700 dark:text-gray-300"
+        data-testid="trends-short-history"
+      >
+        Encore {{ missingMonths }} mois de transactions et les tendances
+        apparaîtront.
+      </p>
+
+      <template v-else-if="compactInsights.length > 0">
+        <figure v-if="compactDigest" class="mb-4" data-testid="trends-lead">
+          <blockquote
+            class="text-sm leading-relaxed text-gray-800 dark:text-gray-200"
+            data-testid="trends-digest-text"
+          >
+            {{ compactDigest.text }}
+          </blockquote>
+          <figcaption
+            class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            data-testid="trends-digest-mention"
+          >
+            Rédigé par l'IA · {{ modelName(compactDigest.model) }}
+          </figcaption>
+        </figure>
+        <p
+          v-else-if="data.headline ?? data.quietSentence"
+          class="mb-4 text-base leading-snug font-semibold text-gray-900 sm:text-lg dark:text-gray-100"
+          data-testid="trends-headline"
+        >
+          {{ data.headline ?? data.quietSentence }}
+        </p>
+
+        <div
+          class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3"
+          data-testid="trends-list"
+        >
+          <SpendingTrendTile
+            v-for="(insight, index) in compactInsights"
+            :key="`${insight.kind}-${insight.unit.type}-${insight.unit.id}`"
+            :class="index >= PHONE_SHOWN ? 'max-sm:hidden' : undefined"
+            :insight="insight"
+            :reading="reading"
+            :window="data.window"
+            :category-name="categoryName"
+          />
+        </div>
+      </template>
+
+      <p
+        v-else-if="data.quietSentence"
+        class="text-sm text-gray-700 dark:text-gray-300"
+        data-testid="trends-quiet"
+      >
+        {{ data.quietSentence }}
+      </p>
+    </div>
+
+    <div
+      v-else-if="data"
       class="transition-opacity duration-200"
       :class="isLoading ? 'opacity-60' : 'opacity-100'"
       :aria-busy="isLoading"

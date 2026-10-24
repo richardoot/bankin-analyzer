@@ -144,8 +144,52 @@ describe('useFiltersStore', () => {
     setActivePinia(createPinia())
     const store = useFiltersStore()
 
-    expect(store.timePeriod).toBe('all')
+    expect(store.timePeriod).toBe('1y')
     expect(store.deductPendingReimbursements).toBe(true)
+  })
+
+  describe('the period', () => {
+    it('opens on twelve months when none was picked', () => {
+      expect(useFiltersStore().timePeriod).toBe('1y')
+    })
+
+    it('keeps the period the user picked before, backend or not', async () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        JSON.stringify({ timePeriod: 'all' })
+      )
+      authState.isAuthenticated = true
+      getFilterPreferences.mockResolvedValue({
+        isPanelExpanded: false,
+        importCategoriesFromFile: true,
+        deductPendingReimbursements: true,
+      })
+      const store = useFiltersStore()
+      expect(store.timePeriod).toBe('all')
+
+      await store.loadFromBackend()
+
+      expect(store.timePeriod).toBe('all')
+    })
+
+    it('spans whole calendar months, the current one included', () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(2026, 9, 24, 12))
+      try {
+        const store = useFiltersStore()
+        expect(store.getDateRangeFromPeriod('1y')).toEqual({
+          startDate: '2025-11-01',
+          endDate: '2026-10-24',
+        })
+        expect(store.getDateRangeFromPeriod('6m').startDate).toBe('2026-05-01')
+        expect(store.getDateRangeFromPeriod('3m').startDate).toBe('2026-08-01')
+        expect(store.getDateRangeFromPeriod('all')).toEqual({
+          startDate: null,
+          endDate: null,
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   describe('loadFromBackend', () => {

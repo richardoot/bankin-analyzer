@@ -123,6 +123,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/BudgetPage.vue'),
     meta: { title: 'Budget', requiresAuth: true },
   },
+  // « Ce qui change » in full: the dashboard keeps its lead and three tiles.
+  {
+    path: '/trends',
+    name: 'trends',
+    component: () => import('@/views/TrendsPage.vue'),
+    meta: { title: 'Tendances', requiresAuth: true },
+  },
   {
     path: '/recurrences',
     name: 'recurrences',

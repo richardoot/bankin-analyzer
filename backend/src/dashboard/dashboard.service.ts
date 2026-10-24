@@ -19,6 +19,7 @@ import {
 } from '../reimbursements/reimbursement-credit.sql'
 import {
   AmortizedSlicesService,
+  type SmoothedPurchaseRow,
   everydayShift,
   everydayShiftByMonth,
   slicesTotal,
@@ -26,6 +27,9 @@ import {
 } from '../transactions/amortized-slices.service'
 import { UNCATEGORIZED_CATEGORY_ID } from './dto'
 import type {
+  DashboardMonthDto,
+  DashboardMonthQueryDto,
+  DashboardUpcomingDto,
   DashboardFiltersDto,
   DashboardSummaryDto,
   MonthlyDataDto,
@@ -34,6 +38,10 @@ import type {
   SpendingStructureDto,
   SubcategoryDataDto,
   ExceptionalEventDto,
+  ExceptionalCategoryDto,
+  StructureBreakdownDto,
+  StructureCategoryDto,
+  StructureShareDto,
   TagFamilyOfYearDto,
 } from './dto'
 import {
@@ -41,6 +49,12 @@ import {
   familyTransactionsCte,
 } from '../tag-families/family-transactions.sql'
 import { calendarDayIn } from '../tags/tag-status'
+import {
+  TREND_RULES,
+  addMonths,
+  completeMonthsBefore,
+  median,
+} from '../trends/trend.detection'
 
 const MONTH_LABELS: Record<string, string> = {
   '01': 'Jan',
@@ -110,6 +124,20 @@ interface SubcategoryAccumulator {
   count: number
   /** Share of `total` carried by exceptional rows. */
   exceptional: number
+  /** `total` month by month, so an average can leave a month out. */
+  byMonth: Map<string, number>
+  /** `exceptional` month by month. */
+  exceptionalByMonth: Map<string, number>
+}
+
+/**
+ * Which months a per-month average reads: `months` is its divisor, and
+ * `outside` sums a month-by-month series over the months it leaves out
+ * (the current one and any after it), to take them off the numerator.
+ */
+interface AverageWindow {
+  months: number
+  outside: (byMonth: Map<string, number> | undefined) => number
 }
 
 /**
@@ -121,6 +149,8 @@ interface EverydayShift {
   shift: number
   /** Slices falling in the window — the « dont X € lissés ». */
   slices: number
+  /** `shift` month by month, so an average can leave a month out. */
+  shiftByMonth?: Map<string, number>
 }
 
 /** The same per category, month by month and line by line. */
@@ -146,7 +176,7 @@ function addSubcategoryRow(
   row: Pick<
     DashboardAggregatedRow,
     'subcategory_id' | 'subcategory' | 'subcategory_icon' | 'transaction_count'
-  > & { is_exceptional?: boolean },
+  > & { is_exceptional?: boolean; month_key?: string },
   amount: number
 ): void {
   const key = row.subcategory_id ?? NO_SUBCATEGORY_KEY
@@ -157,17 +187,29 @@ function addSubcategoryRow(
     total: 0,
     count: 0,
     exceptional: 0,
+    byMonth: new Map<string, number>(),
+    exceptionalByMonth: new Map<string, number>(),
   }
   current.total += amount
   if (row.is_exceptional) current.exceptional += amount
+  if (row.month_key !== undefined) {
+    addTo(current.byMonth, row.month_key, amount)
+    if (row.is_exceptional) {
+      addTo(current.exceptionalByMonth, row.month_key, amount)
+    }
+  }
   current.count += row.transaction_count ?? 0
   current.icon = current.icon ?? row.subcategory_icon ?? null
   target.set(key, current)
 }
 
+function addTo(map: Map<string, number>, key: string, amount: number): void {
+  map.set(key, (map.get(key) ?? 0) + amount)
+}
+
 function toSubcategoryDtos(
   subMap: Map<string, SubcategoryAccumulator>,
-  periodMonths: number,
+  average: AverageWindow,
   shifts?: Map<string, EverydayShift>
 ): SubcategoryDataDto[] {
   const round = (v: number): number => Math.round(v * 100) / 100
@@ -178,7 +220,9 @@ function toSubcategoryDtos(
         subcategory: sd.name,
         amount: round(sd.total),
         transactionCount: sd.count,
-        averagePerMonth: round(sd.total / periodMonths),
+        averagePerMonth: round(
+          (sd.total - average.outside(sd.byMonth)) / average.months
+        ),
       }
       if (sd.icon) dto.icon = sd.icon
       // Only on a line a smoothed purchase touches: every other line reads
@@ -186,8 +230,14 @@ function toSubcategoryDtos(
       const shift = shifts?.get(key)
       if (shift) {
         const everyday = sd.total - sd.exceptional + shift.shift
+        const everydayOutside =
+          average.outside(sd.byMonth) -
+          average.outside(sd.exceptionalByMonth) +
+          average.outside(shift.shiftByMonth)
         dto.everydayAmount = round(everyday)
-        dto.everydayAveragePerMonth = round(everyday / periodMonths)
+        dto.everydayAveragePerMonth = round(
+          (everyday - everydayOutside) / average.months
+        )
         dto.amortizedAmount = round(shift.slices)
       }
       return dto
@@ -205,6 +255,9 @@ interface ExceptionalEventRow {
   name: string
   color: string | null
   icon: string | null
+  family_id: string | null
+  family_name: string | null
+  family_color: string | null
   amount: number
 }
 
@@ -249,6 +302,212 @@ function exceptionalTxCte(userId: string): Prisma.Sql {
 }
 
 /**
+ * Query 1 of the summary: the user's rows between two instants, aggregated
+ * by month, category, subcategory and type, net as `netAmount` says, with
+ * their exceptional, nature, rhythm and recurrence marks. Stats-excluded
+ * accounts are out, joint accounts divided by `netAmount`. Shared by the
+ * summary and the month band, so both read one ledger the same way.
+ */
+function aggregationSql(
+  userId: string,
+  start: Date,
+  end: Date,
+  netAmount: Prisma.Sql
+): Prisma.Sql {
+  return Prisma.sql`
+    WITH ${exceptionalTxCte(userId)},
+    ${reimbursementCreditCtes(userId)}
+    SELECT
+      TO_CHAR(t.date, 'YYYY-MM') AS month_key,
+      c.id AS category_id,
+      COALESCE(c.name, 'Autre') AS category_name,
+      c.icon AS category_icon,
+      t.type::text AS type,
+      -- The real subcategory, not the legacy text column: a row's
+      -- breakdown line is the one its link opens.
+      t.subcategory_id,
+      COALESCE(sc.name, '') AS subcategory,
+      sc.icon AS subcategory_icon,
+      (et.transaction_id IS NOT NULL) AS is_exceptional,
+      COALESCE(sc.nature, c.default_nature)::text AS nature,
+      ${EFFECTIVE_RHYTHM} AS rhythm,
+      ${IS_RECURRING} AS is_recurring,
+      c.catalog_key AS category_catalog_key,
+      COUNT(*)::int AS transaction_count,
+      -- Net of reimbursements, computed per transaction so the credit
+      -- lands on the exact category, subcategory and account that carried
+      -- the spending.
+      SUM(${netAmount})::float AS total_amount,
+      SUM(${RECEIVED_CREDIT_SCALED})::float AS received_credit,
+      SUM(${PENDING_CREDIT_SCALED})::float AS pending_credit
+    FROM app.transactions t
+    LEFT JOIN app.categories c ON c.id = t.category_id
+    LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
+    LEFT JOIN app.accounts a ON a.id = t.account_id
+    LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
+    ${recurringTransactionsJoin(userId)}
+    ${REIMBURSEMENT_CREDIT_JOINS}
+    WHERE t.user_id = ${userId}
+      AND t.date >= ${start}
+      AND t.date <= ${end}
+      AND COALESCE(a.is_excluded_from_stats, false) = false
+    GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, t.subcategory_id, sc.name, sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
+  `
+}
+
+/** One month being summed: what a `MonthlyDataDto` is made of. */
+interface MonthAccumulator {
+  /** Net expenses. */
+  expenses: number
+  income: number
+  /** What was deducted from the expenses: the gross is their sum. */
+  reimbursements: number
+  exceptionalExpenses: number
+  /** Everyday change from smoothed purchases; absent when none. */
+  amortizedShift?: number
+  /** Their slices this month. */
+  amortizedSlices?: number
+}
+
+function emptyMonth(): MonthAccumulator {
+  return { expenses: 0, income: 0, reimbursements: 0, exceptionalExpenses: 0 }
+}
+
+/**
+ * Adds an aggregated row, an expense or an income, to its month. `amount`
+ * is already net, so an income transfer that repaid a debt contributes only
+ * the part that was not a refund; `deducted` is what came off an expense.
+ */
+function addRowToMonth(
+  months: Map<string, MonthAccumulator>,
+  row: Pick<DashboardAggregatedRow, 'month_key' | 'type' | 'is_exceptional'>,
+  amount: number,
+  deducted: number
+): void {
+  const month = months.get(row.month_key) ?? emptyMonth()
+  if (row.type === 'EXPENSE') {
+    month.expenses += amount
+    month.reimbursements += deducted
+    if (row.is_exceptional) month.exceptionalExpenses += amount
+  } else {
+    month.income += amount
+  }
+  months.set(row.month_key, month)
+}
+
+/**
+ * A smoothed purchase, everyday reading only: it trades its own month for
+ * its slices. A month only slices reach is added with nothing real in it.
+ */
+function addSmoothedToMonths(
+  months: Map<string, MonthAccumulator>,
+  purchase: SmoothedPurchaseRow
+): void {
+  for (const [key, amount] of everydayShiftByMonth(purchase)) {
+    const month = months.get(key) ?? emptyMonth()
+    month.amortizedShift = (month.amortizedShift ?? 0) + amount
+    months.set(key, month)
+  }
+  for (const slice of purchase.slices) {
+    const month = months.get(slice.month)
+    if (month) {
+      month.amortizedSlices = (month.amortizedSlices ?? 0) + slice.amount
+    }
+  }
+}
+
+/**
+ * A month as the summary reports it. `expenses` is already net; the gross is
+ * it plus what was deducted. Both shares are exact — the exceptional part is
+ * the sum of the netted exceptional transactions, not a ratio taken on gross
+ * amounts and re-applied to a net total.
+ */
+function toMonthlyDto(month: string, data: MonthAccumulator): MonthlyDataDto {
+  // Rounded as the months always were, so the series do not move by a cent.
+  const toCents = (v: number): number => Math.round(v * 100) / 100
+  const parts = month.split('-')
+  const year = parts[0] ?? ''
+  const monthNum = parts[1] ?? '01'
+  const netExpenses = data.expenses
+  const grossExpenses = data.expenses + data.reimbursements
+  const dto: MonthlyDataDto = {
+    month,
+    label: `${MONTH_LABELS[monthNum] ?? monthNum} ${year}`,
+    expenses: toCents(grossExpenses),
+    netExpenses: toCents(netExpenses),
+    income: toCents(data.income),
+    exceptionalExpenses: toCents(data.exceptionalExpenses),
+    everydayNetExpenses: toCents(
+      netExpenses - data.exceptionalExpenses + (data.amortizedShift ?? 0)
+    ),
+  }
+  // Only on a month a smoothed purchase touches.
+  if (data.amortizedShift !== undefined) {
+    dto.amortizedExpenses = toCents(data.amortizedSlices ?? 0)
+  }
+  return dto
+}
+
+/** A recurrence as the band reads it, before it is kept or not. */
+export interface RecurrenceOfMonthRow {
+  id: string
+  name: string
+  status: string
+  amount: number
+  next_expected: string
+  category_id: string | null
+  /** A charge of it already fell in the month read. */
+  charged_this_month: boolean
+  /** Its latest charge was on a stats-excluded account. */
+  excluded: boolean
+}
+
+/**
+ * What is still to come this month, by date then name: the ACTIVE
+ * recurrences due from `asOf` to the month's end, and those due earlier
+ * this month with no charge of theirs this month yet — late, they still
+ * count until the month ends. A STOPPED or CANDIDATE series proves no
+ * charge to come; one paid from a stats-excluded account is out, as its
+ * lines are.
+ */
+export function upcomingOf(
+  rows: readonly RecurrenceOfMonthRow[],
+  asOf: string
+): DashboardUpcomingDto[] {
+  const month = asOf.slice(0, 7)
+  return rows
+    .filter(
+      r =>
+        r.status === 'ACTIVE' &&
+        !r.excluded &&
+        r.next_expected.slice(0, 7) === month &&
+        (r.next_expected >= asOf || !r.charged_this_month)
+    )
+    .map(r => ({
+      id: r.id,
+      name: r.name,
+      amount: roundCents(Number(r.amount)),
+      nextExpected: r.next_expected,
+      categoryId: r.category_id,
+    }))
+    .sort(
+      (a, b) =>
+        a.nextExpected.localeCompare(b.nextExpected) ||
+        a.name.localeCompare(b.name, 'fr')
+    )
+}
+
+/** `YYYY-MM-01` as the UTC midnight `t.date` is compared with. */
+const monthStartUtc = (month: string): Date =>
+  new Date(`${month}-01T00:00:00.000Z`)
+
+/** The number of days of a `YYYY-MM` month. */
+function daysIn(month: string): number {
+  const [year, mon] = month.split('-').map(Number)
+  return new Date(Date.UTC(year ?? 0, mon ?? 1, 0)).getUTCDate()
+}
+
+/**
  * The transfer categories whose rows mean money set aside: what
  * `savingsTransfers` adds up. Informational only — the savings of a period,
  * and its rate, are what the income leaves once the expenses are paid.
@@ -288,7 +547,7 @@ function addToStructure(
 }
 
 function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
-  const r = (v: number) => Math.round(v * 100) / 100
+  const r = (v: number): number => Math.round(v * 100) / 100
   return {
     essential: r(s.essential),
     pleasure: r(s.pleasure),
@@ -298,6 +557,108 @@ function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
     unknownRhythm: r(s.unknownRhythm),
     recurring: r(s.recurring),
     total: r(s.total),
+  }
+}
+
+/** The four segments of the structure: two per axis, « à migrer » aside. */
+type Segment = 'essential' | 'pleasure' | 'committed' | 'variable'
+
+/**
+ * The segments a line falls in: one per axis, none on an axis it carries no
+ * attribute for — the buckets of `addToStructure`, without « unknown ».
+ */
+function segmentsOf(row: {
+  nature: string | null
+  rhythm: string | null
+}): Segment[] {
+  const segments: Segment[] = []
+  if (row.nature === 'ESSENTIAL') segments.push('essential')
+  else if (row.nature === 'PLEASURE') segments.push('pleasure')
+  if (row.rhythm === 'COMMITTED') segments.push('committed')
+  else if (row.rhythm === 'VARIABLE') segments.push('variable')
+  return segments
+}
+
+/** One category inside one segment, being summed. */
+interface SegmentCategoryAccumulator {
+  amount: number
+  icon: string | null
+  /** `amount` month by month, so an average can leave a month out. */
+  byMonth: Map<string, number>
+}
+
+/** A segment's categories, keyed by category id, on one reading. */
+type StructureComposition = Record<
+  Segment,
+  Map<string, SegmentCategoryAccumulator>
+>
+
+function emptyComposition(): StructureComposition {
+  return {
+    essential: new Map(),
+    pleasure: new Map(),
+    committed: new Map(),
+    variable: new Map(),
+  }
+}
+
+/**
+ * Adds a line to the categories of the segments it falls in: the very rows
+ * and amounts `addToStructure` reads, so a segment's composition sums to
+ * the segment.
+ */
+function addToComposition(
+  target: StructureComposition,
+  row: { nature: string | null; rhythm: string | null },
+  line: { categoryKey: string; icon: string | null; month: string },
+  amount: number
+): void {
+  for (const segment of segmentsOf(row)) {
+    const current = target[segment].get(line.categoryKey) ?? {
+      amount: 0,
+      icon: line.icon,
+      byMonth: new Map<string, number>(),
+    }
+    current.amount += amount
+    current.icon = current.icon ?? line.icon
+    addTo(current.byMonth, line.month, amount)
+    target[segment].set(line.categoryKey, current)
+  }
+}
+
+/** Adds a line to its month's structure, as `addToStructure` reads it. */
+function addToMonthStructure(
+  target: Map<string, SpendingStructureDto>,
+  month: string,
+  row: { nature: string | null; rhythm: string | null; is_recurring: boolean },
+  amount: number
+): void {
+  const structure = target.get(month) ?? emptyStructure()
+  addToStructure(structure, row, amount)
+  target.set(month, structure)
+}
+
+/**
+ * A segment's share of each month's spending, in percent to the tenth,
+ * aligned on `months`: the share trend's series (trend.detection.ts, trend
+ * 4), the segment over the month's total on the same reading. Null on a
+ * month with nothing spent, which has no share — the trend skips it too.
+ */
+function shareByMonth(
+  byMonth: Map<string, SpendingStructureDto>,
+  months: string[]
+): StructureShareDto {
+  const series = (segment: Segment): (number | null)[] =>
+    months.map(m => {
+      const structure = byMonth.get(m)
+      if (!structure || structure.total <= 0) return null
+      return Math.round((structure[segment] / structure.total) * 1000) / 10
+    })
+  return {
+    essential: series('essential'),
+    pleasure: series('pleasure'),
+    committed: series('committed'),
+    variable: series('variable'),
   }
 }
 
@@ -355,45 +716,9 @@ export class DashboardService {
     ] = await Promise.all([
       // Query 1: Aggregation by month + category + subcategory + type
       // (excludes stats-excluded accounts).
-      this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
-        WITH ${exceptionalTxCte(userId)},
-        ${reimbursementCreditCtes(userId)}
-        SELECT
-          TO_CHAR(t.date, 'YYYY-MM') AS month_key,
-          c.id AS category_id,
-          COALESCE(c.name, 'Autre') AS category_name,
-          c.icon AS category_icon,
-          t.type::text AS type,
-          -- The real subcategory, not the legacy text column: a row's
-          -- breakdown line is the one its link opens.
-          t.subcategory_id,
-          COALESCE(sc.name, '') AS subcategory,
-          sc.icon AS subcategory_icon,
-          (et.transaction_id IS NOT NULL) AS is_exceptional,
-          COALESCE(sc.nature, c.default_nature)::text AS nature,
-          ${EFFECTIVE_RHYTHM} AS rhythm,
-          ${IS_RECURRING} AS is_recurring,
-          c.catalog_key AS category_catalog_key,
-          COUNT(*)::int AS transaction_count,
-          -- Net of reimbursements, computed per transaction so the credit
-          -- lands on the exact category, subcategory and account that carried
-          -- the spending.
-          SUM(${netAmount})::float AS total_amount,
-          SUM(${RECEIVED_CREDIT_SCALED})::float AS received_credit,
-          SUM(${PENDING_CREDIT_SCALED})::float AS pending_credit
-        FROM app.transactions t
-        LEFT JOIN app.categories c ON c.id = t.category_id
-        LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
-        LEFT JOIN app.accounts a ON a.id = t.account_id
-        LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
-        ${recurringTransactionsJoin(userId)}
-        ${REIMBURSEMENT_CREDIT_JOINS}
-        WHERE t.user_id = ${userId}
-          AND t.date >= ${startDate}
-          AND t.date <= ${endDate}
-          AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, t.subcategory_id, sc.name, sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
-      `),
+      this.prisma.$queryRaw<DashboardAggregatedRow[]>(
+        aggregationSql(userId, startDate, endDate, netAmount)
+      ),
       // Query 2: Distinct account names (including excluded from stats, for
       // filter panel). Sourced from the Account relation since the legacy
       // string column on transactions has been dropped.
@@ -417,8 +742,12 @@ export class DashboardService {
           tg.name,
           tg.color,
           tg.icon,
+          tf.id AS family_id,
+          tf.name AS family_name,
+          tf.color AS family_color,
           SUM(${netAmount})::float AS amount
         FROM app.tags tg
+        LEFT JOIN app.tag_families tf ON tf.id = tg.family_id
         JOIN app.transaction_tags tt ON tt.tag_id = tg.id
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
@@ -429,7 +758,7 @@ export class DashboardService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY tg.id, tg.name, tg.color, tg.icon
+        GROUP BY tg.id, tg.name, tg.color, tg.icon, tf.id, tf.name, tf.color
         ORDER BY amount DESC
       `),
       // Query 4: what is still owed to the user, all debts together. A
@@ -502,19 +831,7 @@ export class DashboardService {
     let periodExpenses = 0
 
     // Build aggregation data structures
-    const monthlyMap = new Map<
-      string,
-      {
-        expenses: number
-        income: number
-        reimbursements: number
-        exceptionalExpenses: number
-        /** Everyday change from smoothed purchases; 0 when none. */
-        amortizedShift?: number
-        /** Their slices this month. */
-        amortizedSlices?: number
-      }
-    >()
+    const monthlyMap = new Map<string, MonthAccumulator>()
     /**
      * Net exceptional expenses per category. Net, not gross: the credit is
      * attached to the very transaction that carries the tag, so a holiday
@@ -551,6 +868,15 @@ export class DashboardService {
       string,
       Map<string, number>
     >()
+    /**
+     * The structure's four segments category by category, on both readings,
+     * and the structure month by month — what the unfolded lines read. Fed
+     * the very rows and amounts the two structures are, so they agree.
+     */
+    const composition = emptyComposition()
+    const everydayComposition = emptyComposition()
+    const structureByMonth = new Map<string, SpendingStructureDto>()
+    const everydayStructureByMonth = new Map<string, SpendingStructureDto>()
 
     for (const row of rows) {
       const categoryKey = categoryKeyOf(row.category_id)
@@ -575,25 +901,14 @@ export class DashboardService {
       // that repaid a debt contributes only the part that was not a refund —
       // a 550 EUR transfer covering 50 EUR of expenses counts 500 as income
       // instead of vanishing from the income side altogether.
-      const monthData = monthlyMap.get(row.month_key) ?? {
-        expenses: 0,
-        income: 0,
-        reimbursements: 0,
-        exceptionalExpenses: 0,
-      }
-
+      addRowToMonth(monthlyMap, row, amount, received + pending)
       if (row.type === 'EXPENSE') {
-        monthData.expenses += amount
         periodExpenses += amount
-        monthData.reimbursements += received + pending
-        if (row.is_exceptional) monthData.exceptionalExpenses += amount
         addToStructure(structure, row, amount)
         if (!row.is_exceptional) addToStructure(everydayStructure, row, amount)
       } else {
-        monthData.income += amount
         periodIncome += amount
       }
-      monthlyMap.set(row.month_key, monthData)
 
       // Category aggregation
       if (row.type === 'EXPENSE') {
@@ -626,6 +941,24 @@ export class DashboardService {
 
       // Breakdown aggregation (per-month + per-subcategory by category)
       if (shouldIncludeBreakdown) {
+        if (row.type === 'EXPENSE') {
+          const line = {
+            categoryKey,
+            icon: row.category_icon,
+            month: row.month_key,
+          }
+          addToComposition(composition, row, line, amount)
+          addToMonthStructure(structureByMonth, row.month_key, row, amount)
+          if (!row.is_exceptional) {
+            addToComposition(everydayComposition, row, line, amount)
+            addToMonthStructure(
+              everydayStructureByMonth,
+              row.month_key,
+              row,
+              amount
+            )
+          }
+        }
         const monthlyTarget =
           row.type === 'EXPENSE'
             ? expenseMonthlyByCategory
@@ -679,22 +1012,8 @@ export class DashboardService {
         })
       }
 
-      for (const [month, amount] of everydayShiftByMonth(p)) {
-        const monthData = monthlyMap.get(month) ?? {
-          expenses: 0,
-          income: 0,
-          reimbursements: 0,
-          exceptionalExpenses: 0,
-        }
-        monthData.amortizedShift = (monthData.amortizedShift ?? 0) + amount
-        monthlyMap.set(month, monthData)
-      }
+      addSmoothedToMonths(monthlyMap, p)
       for (const slice of p.slices) {
-        const monthData = monthlyMap.get(slice.month)
-        if (monthData) {
-          monthData.amortizedSlices =
-            (monthData.amortizedSlices ?? 0) + slice.amount
-        }
         // A slice falls every month without a new decision: committed while
         // the smoothing runs, whatever the subcategory's own rhythm.
         addToStructure(
@@ -705,6 +1024,42 @@ export class DashboardService {
       }
       if (p.source_in_window) {
         addToStructure(everydayStructure, p, -p.net)
+      }
+      if (shouldIncludeBreakdown) {
+        // The same trade, segment by segment and month by month.
+        const sliceRow = {
+          nature: p.nature,
+          rhythm: SLICE_RHYTHM,
+          is_recurring: false,
+        }
+        for (const slice of p.slices) {
+          addToComposition(
+            everydayComposition,
+            sliceRow,
+            { categoryKey, icon: p.category_icon, month: slice.month },
+            slice.amount
+          )
+          addToMonthStructure(
+            everydayStructureByMonth,
+            slice.month,
+            sliceRow,
+            slice.amount
+          )
+        }
+        if (p.source_in_window) {
+          addToComposition(
+            everydayComposition,
+            p,
+            { categoryKey, icon: p.category_icon, month: p.source_month },
+            -p.net
+          )
+          addToMonthStructure(
+            everydayStructureByMonth,
+            p.source_month,
+            p,
+            -p.net
+          )
+        }
       }
 
       let entry = shiftByCategory.get(categoryKey)
@@ -736,8 +1091,13 @@ export class DashboardService {
       }
       const lineKey = p.subcategory_id ?? NO_SUBCATEGORY_KEY
       const line = entry.subcategories.get(lineKey) ?? { shift: 0, slices: 0 }
+      const lineByMonth = line.shiftByMonth ?? new Map<string, number>()
       line.shift += shift
       line.slices += slices
+      for (const [month, amount] of everydayShiftByMonth(p)) {
+        addTo(lineByMonth, month, amount)
+      }
+      line.shiftByMonth = lineByMonth
       entry.subcategories.set(lineKey, line)
 
       if (shouldIncludeBreakdown) {
@@ -769,51 +1129,13 @@ export class DashboardService {
     // Sort months and build monthly data with reimbursement deductions
     const sortedMonths = Array.from(monthlyMap.keys()).sort()
 
-    const monthlyData: MonthlyDataDto[] = sortedMonths.map(month => {
-      const parts = month.split('-')
-      const year = parts[0] ?? ''
-      const monthNum = parts[1] ?? '01'
-      const data = monthlyMap.get(month) ?? {
-        expenses: 0,
-        income: 0,
-        reimbursements: 0,
-        exceptionalExpenses: 0,
-      }
-
-      // `expenses` is already net; the gross is it plus what was deducted.
-      // Both shares are exact now — the exceptional part is the sum of the
-      // netted exceptional transactions, not a ratio taken on gross amounts
-      // and re-applied to a net total.
-      const netExpenses = data.expenses
-      const grossExpenses = data.expenses + data.reimbursements
-
-      const dto: MonthlyDataDto = {
-        month,
-        label: `${MONTH_LABELS[monthNum] ?? monthNum} ${year}`,
-        expenses: Math.round(grossExpenses * 100) / 100,
-        netExpenses: Math.round(netExpenses * 100) / 100,
-        income: Math.round(data.income * 100) / 100,
-        exceptionalExpenses: Math.round(data.exceptionalExpenses * 100) / 100,
-        everydayNetExpenses:
-          Math.round(
-            (netExpenses -
-              data.exceptionalExpenses +
-              (data.amortizedShift ?? 0)) *
-              100
-          ) / 100,
-      }
-      // Only on a month a smoothed purchase touches.
-      if (data.amortizedShift !== undefined) {
-        dto.amortizedExpenses =
-          Math.round((data.amortizedSlices ?? 0) * 100) / 100
-      }
-      return dto
-    })
+    const monthlyData: MonthlyDataDto[] = sortedMonths.map(month =>
+      toMonthlyDto(month, monthlyMap.get(month) ?? emptyMonth())
+    )
 
     // Build breakdown month labels (full range when start/end are explicit,
     // otherwise the union of months actually present in the rows)
     let breakdownMonthLabels: string[] = []
-    let periodMonthsCount = 1
     if (shouldIncludeBreakdown) {
       if (filters.startDate && filters.endDate) {
         const cursor = new Date(
@@ -829,10 +1151,29 @@ export class DashboardService {
       } else {
         breakdownMonthLabels = sortedMonths.slice()
       }
-      periodMonthsCount = Math.max(1, breakdownMonthLabels.length)
     }
 
-    const round = (v: number) => Math.round(v * 100) / 100
+    // The averages read the closed months only: those of the period before
+    // the current month (in Paris, as « today » reads everywhere else). The
+    // current month is still drawn, in `monthlyData` and `monthlyAmounts`,
+    // but a month counted whole on the 23rd pulled every average down: the
+    // income of October 2026 read 2 289 € a month instead of 2 497 €. A
+    // period with no closed month — only the current one — averages what it
+    // has, over 1. The months after the current one, which a custom period
+    // may reach, are left out with it.
+    const currentMonth = calendarDayIn(new Date()).slice(0, 7)
+    const closedMonths = breakdownMonthLabels.filter(m => m < currentMonth)
+    const leftOutMonths =
+      closedMonths.length > 0
+        ? breakdownMonthLabels.filter(m => m >= currentMonth)
+        : []
+    const average: AverageWindow = {
+      months: Math.max(1, closedMonths.length),
+      outside: byMonth =>
+        leftOutMonths.reduce((sum, m) => sum + (byMonth?.get(m) ?? 0), 0),
+    }
+
+    const round = (v: number): number => Math.round(v * 100) / 100
 
     function buildExpenseCategoryDto(
       categoryId: string,
@@ -873,7 +1214,7 @@ export class DashboardService {
       const shift = shiftByCategory.get(categoryId)
       const subcategories = toSubcategoryDtos(
         subMap,
-        periodMonthsCount,
+        average,
         shift?.subcategories
       )
 
@@ -883,7 +1224,9 @@ export class DashboardService {
       )
 
       dto.transactionCount = totalCount
-      dto.averagePerMonth = round(data.amount / periodMonthsCount)
+      dto.averagePerMonth = round(
+        (data.amount - average.outside(monthMap)) / average.months
+      )
 
       // Everyday / exceptional split, exact. Both shares are sums of netted
       // transactions, so a refunded holiday reduces the exceptional side and
@@ -901,9 +1244,15 @@ export class DashboardService {
       // the divisor by the event days would move *every* category, and would be
       // plainly wrong for the fixed ones — rent, insurance and subscriptions are
       // still debited while their owner is away.
-      dto.everydayAveragePerMonth = round(everydayAmount / periodMonthsCount)
-
       const excMonthMap = expenseExceptionalMonthlyByCategory.get(categoryId)
+      const everydayOutside =
+        average.outside(monthMap) -
+        average.outside(excMonthMap) +
+        average.outside(shift?.shiftByMonth)
+      dto.everydayAveragePerMonth = round(
+        (everydayAmount - everydayOutside) / average.months
+      )
+
       dto.everydayMonthlyAmounts = breakdownMonthLabels.map((m, i) => {
         const net = dto.monthlyAmounts?.[i] ?? 0
         return round(
@@ -951,7 +1300,7 @@ export class DashboardService {
       const subMap =
         incomeSubcatByCategory.get(categoryId) ??
         new Map<string, SubcategoryAccumulator>()
-      const subcategories = toSubcategoryDtos(subMap, periodMonthsCount)
+      const subcategories = toSubcategoryDtos(subMap, average)
 
       const totalCount = Array.from(subMap.values()).reduce(
         (s, sd) => s + sd.count,
@@ -959,7 +1308,9 @@ export class DashboardService {
       )
 
       dto.transactionCount = totalCount
-      dto.averagePerMonth = round(data.amount / periodMonthsCount)
+      dto.averagePerMonth = round(
+        (data.amount - average.outside(monthMap)) / average.months
+      )
       if (subcategories.length > 0) dto.subcategories = subcategories
 
       return dto
@@ -1002,6 +1353,9 @@ export class DashboardService {
         name: r.name,
         color: r.color,
         icon: r.icon,
+        familyId: r.family_id ?? null,
+        familyName: r.family_name ?? null,
+        familyColor: r.family_color ?? null,
         amount: Math.round((r.amount ?? 0) * 100) / 100,
       })
     )
@@ -1047,11 +1401,220 @@ export class DashboardService {
     }
 
     if (shouldIncludeBreakdown) {
-      response.periodMonths = periodMonthsCount
+      response.periodMonths = average.months
       response.monthLabels = breakdownMonthLabels
+
+      /** A segment's categories, the heaviest first, averaged as the rest. */
+      const toBreakdown = (c: StructureComposition): StructureBreakdownDto => {
+        const rowsOf = (segment: Segment): StructureCategoryDto[] =>
+          Array.from(c[segment], ([categoryId, acc]) => ({
+            categoryId,
+            category: categoryNameById.get(categoryId) ?? 'Autre',
+            icon: acc.icon,
+            amount: round(acc.amount),
+            averagePerMonth: round(
+              (acc.amount - average.outside(acc.byMonth)) / average.months
+            ),
+          }))
+            // A category a smoothing trade cancels out says nothing.
+            .filter(r => r.amount !== 0)
+            .sort(
+              (a, b) =>
+                b.amount - a.amount ||
+                a.category.localeCompare(b.category, 'fr')
+            )
+        return {
+          essential: rowsOf('essential'),
+          pleasure: rowsOf('pleasure'),
+          committed: rowsOf('committed'),
+          variable: rowsOf('variable'),
+        }
+      }
+      response.structureBreakdown = {
+        everyday: toBreakdown(everydayComposition),
+        real: toBreakdown(composition),
+      }
+      response.structureShareByMonth = {
+        everyday: shareByMonth(everydayStructureByMonth, breakdownMonthLabels),
+        real: shareByMonth(structureByMonth, breakdownMonthLabels),
+      }
+      response.exceptionalByCategory = Array.from(
+        exceptionalExpenseByCategory,
+        ([categoryId, amount]): ExceptionalCategoryDto => ({
+          categoryId,
+          category: categoryNameById.get(categoryId) ?? 'Autre',
+          icon: expenseByCategoryMap.get(categoryId)?.icon ?? null,
+          amount: round(amount),
+        })
+      )
+        .filter(c => c.amount !== 0)
+        .sort(
+          (a, b) =>
+            b.amount - a.amount || a.category.localeCompare(b.category, 'fr')
+        )
     }
 
     return response
+  }
+
+  /**
+   * « Ce mois-ci » (agent-os/product/dashboard-refonte.md, lot 1): the
+   * current month to date against the habit, the median of the six closed
+   * months before it — the window « Ce qui change » reads by default, with
+   * its rule for a short history. The months are read with the summary's
+   * own aggregation (query 1) and smoothed slices, so a month here is the
+   * month of `monthlyData`, to the cent.
+   *
+   * The habit is prorated linearly over the days (« à ce stade du mois »):
+   * a rent paid on the 1st reads as ahead of it early in the month. In
+   * « Tout » the habit is the median of the real expenses, events included,
+   * as the reading says.
+   */
+  async getMonth(
+    userId: string,
+    query: DashboardMonthQueryDto
+  ): Promise<DashboardMonthDto> {
+    // « À venir » reads the recurrence cache: bring it up to date.
+    await this.recurrences.refreshQuietly(userId)
+
+    const asOf = query.asOf ?? calendarDayIn(new Date())
+    const month = asOf.slice(0, 7)
+    const asOfDay = Number(asOf.slice(8, 10))
+    const daysInMonth = daysIn(month)
+    const window = TREND_RULES.defaultWindow
+    const firstMonth = addMonths(month, -window)
+
+    const start = monthStartUtc(firstMonth)
+    // The whole `asOf` day, as a summary ending on it reads it.
+    const asOfStart = new Date(`${asOf}T00:00:00.000Z`)
+    const end = new Date(asOfStart.getTime() + 24 * 3600 * 1000 - 1)
+    const monthStart = monthStartUtc(month)
+    const nextMonthStart = monthStartUtc(addMonths(month, 1))
+
+    const netAmount = netAmountSql({
+      deductReceived: query.deductReimbursements !== false,
+      deductPending:
+        query.deductPendingReimbursements ??
+        (await this.filterPreferences.deductsPendingByDefault(userId)),
+    })
+
+    const [rows, smoothedRows, history, recurrenceRows] = await Promise.all([
+      this.prisma.$queryRaw<DashboardAggregatedRow[]>(
+        aggregationSql(userId, start, end, netAmount)
+      ),
+      // Slices up to the current month, whole: a slice falls on the month,
+      // not on a day of it.
+      this.amortizedSlices.read({
+        userId,
+        netAmount,
+        start,
+        end,
+        firstMonth: `${firstMonth}-01`,
+        lastMonth: `${month}-01`,
+        scope: Prisma.sql`COALESCE(a.is_excluded_from_stats, false) = false`,
+      }),
+      // Where the history starts, as the trends read it: the habit needs
+      // whole months.
+      this.prisma.$queryRaw<Array<{ start: string | null }>>(Prisma.sql`
+        SELECT TO_CHAR(MIN(t.date), 'YYYY-MM-DD') AS start
+        FROM app.transactions t
+        WHERE t.user_id = ${userId}
+      `),
+      // The user's recurrences, each with whether a charge of it already
+      // fell this month and whether its latest charge was on a
+      // stats-excluded account; `upcomingOf` keeps those still to come.
+      this.prisma.$queryRaw<RecurrenceOfMonthRow[]>(Prisma.sql`
+        SELECT
+          r.id,
+          COALESCE(NULLIF(r.name, ''), r.label) AS name,
+          r.status::text AS status,
+          r.amount::float AS amount,
+          TO_CHAR(r.next_expected, 'YYYY-MM-DD') AS next_expected,
+          r.category_id,
+          EXISTS (
+            SELECT 1
+            FROM app.recurrence_transactions rt
+            JOIN app.transactions t ON t.id = rt.transaction_id
+            WHERE rt.recurrence_id = r.id
+              AND t.date >= ${monthStart}
+              AND t.date < ${nextMonthStart}
+          ) AS charged_this_month,
+          COALESCE(latest.excluded, false) AS excluded
+        FROM app.recurrences r
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(a.is_excluded_from_stats, false) AS excluded
+          FROM app.recurrence_transactions rt
+          JOIN app.transactions t ON t.id = rt.transaction_id
+          LEFT JOIN app.accounts a ON a.id = t.account_id
+          WHERE rt.recurrence_id = r.id
+          ORDER BY t.date DESC, t.id DESC
+          LIMIT 1
+        ) latest ON true
+        WHERE r.user_id = ${userId}
+      `),
+    ])
+
+    const months = new Map<string, MonthAccumulator>()
+    for (const row of rows) {
+      // A transfer is neither spending nor earning.
+      if (row.type === 'TRANSFER') continue
+      addRowToMonth(months, row, row.total_amount, 0)
+    }
+    for (const purchase of smoothedRows) addSmoothedToMonths(months, purchase)
+    const monthOf = (key: string): MonthlyDataDto =>
+      toMonthlyDto(key, months.get(key) ?? emptyMonth())
+    const spentOf = (m: MonthlyDataDto): number =>
+      query.reading === 'real' ? m.netExpenses : m.everydayNetExpenses
+
+    // The closed months the habit reads: the six before the current one,
+    // those the history covers whole.
+    const habitMonths = Math.min(
+      window,
+      completeMonthsBefore(history[0]?.start ?? null, month)
+    )
+    const closed = Array.from({ length: habitMonths }, (_, i) =>
+      monthOf(addMonths(month, i - habitMonths))
+    )
+    const current = monthOf(month)
+    const hasHabit = habitMonths >= TREND_RULES.minHistoryMonths
+
+    const spent = spentOf(current)
+    const habit = hasHabit ? roundCents(median(closed.map(spentOf))) : null
+    const incomeSeries = closed.map(m => m.income)
+    const incomeExpected = hasHabit ? roundCents(median(incomeSeries)) : null
+
+    const upcoming = upcomingOf(recurrenceRows, asOf)
+    const upcomingTotal = roundCents(
+      upcoming.reduce((sum, u) => sum + u.amount, 0)
+    )
+    const remainingToLive =
+      incomeExpected === null
+        ? null
+        : roundCents(incomeExpected - spent - upcomingTotal)
+
+    return {
+      month,
+      asOfDay,
+      daysInMonth,
+      spent,
+      spentSeries: [...closed.map(spentOf), spent],
+      habit,
+      habitToDate:
+        habit === null ? null : roundCents((habit * asOfDay) / daysInMonth),
+      habitMonths,
+      incomeReceived: current.income,
+      incomeExpected,
+      incomeSeries,
+      upcoming,
+      upcomingTotal,
+      remainingToLive,
+      remainingShare:
+        remainingToLive !== null &&
+        incomeExpected !== null &&
+        incomeExpected > 0
+          ? Math.round((remainingToLive / incomeExpected) * 10000) / 10000
+          : null,
+    }
   }
 
   /**

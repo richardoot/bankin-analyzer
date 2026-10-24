@@ -8,6 +8,11 @@ import type {
 } from '@/lib/api'
 import { formatCurrency, formatMonth } from '@/lib/formatters'
 import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+import {
+  STATE_BADGE_CLASSES,
+  STATE_COLORS,
+  type StateTone,
+} from '@/lib/stateTints'
 
 /**
  * The reference windows « Ce qui change » offers, in complete months before
@@ -155,44 +160,43 @@ export function badgeText(insight: TrendInsightDto): string {
   )
 }
 
-export type TrendHue = 'success' | 'up' | 'down' | 'todo'
-
-export function hueOf(insight: TrendInsightDto): TrendHue {
-  if (insight.kind === 'uncategorized') return 'todo'
-  if (insight.tone === 'success') return 'success'
-  return insight.direction
-}
+/** A trend's tint: one of the three states, or the lines to file. */
+export type TrendHue = StateTone | 'todo'
 
 /**
- * A rise is never a reproach: it reads in a calm blue, not in red. Only a
- * drop on a pleasure the user chose is green; the lines to file are the
- * one thing to do, in amber.
+ * A drop reads in teal, a rise in amber, as the month's band reads its
+ * gap to the habit. Neither is a verdict, so no green and no red. The
+ * savings and a shift between two subcategories are not spending above or
+ * below a habit: grey. The lines to file are a thing to do: amber, the
+ * hue of « À faire ».
  */
-export const BADGE_CLASSES: Record<TrendHue, string> = {
-  success:
-    'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-  up: 'bg-sky-50 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
-  down: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300',
-  todo: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+export function hueOf(insight: TrendInsightDto): TrendHue {
+  if (insight.kind === 'uncategorized') return 'todo'
+  if (insight.kind === 'savings' || insight.kind === 'shift') return 'neutral'
+  return insight.direction === 'up' ? 'over' : 'under'
 }
 
-export const SPARK_COLORS: Record<TrendHue, string> = {
-  success: '#10b981',
-  up: '#0ea5e9',
-  down: '#64748b',
-  todo: '#f59e0b',
+export const BADGE_CLASSES: Readonly<Record<TrendHue, string>> = {
+  ...STATE_BADGE_CLASSES,
+  todo: STATE_BADGE_CLASSES.over,
 }
 
-const ARROWS: Record<TrendHue, string> = {
-  success: '↓',
+/** The last point of a trend's sparkline; the line is the data hue. */
+export const SPARK_COLORS: Readonly<Record<TrendHue, string>> = {
+  ...STATE_COLORS,
+  todo: STATE_COLORS.over,
+}
+
+const ARROWS: Record<TrendInsightDto['direction'], string> = {
   up: '↑',
   down: '↓',
-  todo: '',
 }
 
 /** A word badge says it all: no arrow beside it. */
 export const arrowOf = (insight: TrendInsightDto): string =>
-  WORD_BADGES[insight.kind] ? '' : ARROWS[hueOf(insight)]
+  WORD_BADGES[insight.kind] || insight.kind === 'uncategorized'
+    ? ''
+    : ARROWS[insight.direction]
 
 /** What a reader hears for the badge. */
 export function badgeLabel(insight: TrendInsightDto): string {

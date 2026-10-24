@@ -5,7 +5,14 @@
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import { useTagsStore } from '@/stores/tags'
-  import type { CreateTagFamilyDto, TagDto, TagFamilyDto } from '@/lib/api'
+  import { useFiltersStore } from '@/stores/filters'
+  import {
+    api,
+    type CreateTagFamilyDto,
+    type TagDto,
+    type TagFamilyDto,
+    type TagFamilyOfYearDto,
+  } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
@@ -28,6 +35,7 @@
     type SegmentedOption,
   } from '@/components/ui/SegmentedControl.vue'
   import TagCard from '@/components/tags/TagCard.vue'
+  import TagFamiliesOfYearCard from '@/components/dashboard/TagFamiliesOfYearCard.vue'
   import {
     eventYear,
     eventYears,
@@ -289,9 +297,46 @@
     loadFailed.value = tagsStore.error !== null
   }
 
+  /**
+   * « Épisodes de l'année », moved here from the dashboard
+   * (agent-os/product/dashboard-refonte.md, lot 4): what each family cost
+   * over the current calendar year. The summary carries it whatever the
+   * period; asked over the year so far, without the category breakdown,
+   * with the dashboard's reimbursement reading. A supplement: a failure
+   * leaves the card out, the page stands.
+   */
+  const filtersStore = useFiltersStore()
+  const familiesOfYear = ref<{
+    families: TagFamilyOfYearDto[]
+    realExpenses: number | null
+    exceptionalExpenses: number | null
+  } | null>(null)
+
+  async function loadFamiliesOfYear(): Promise<void> {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    try {
+      const summary = await api.getDashboardSummary({
+        startDate: `${now.getFullYear()}-01-01`,
+        endDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+        deductReimbursements: true,
+        deductPendingReimbursements: filtersStore.deductPendingReimbursements,
+        includeCategoryBreakdown: false,
+      })
+      familiesOfYear.value = {
+        families: summary.tagFamiliesOfYear ?? [],
+        realExpenses: summary.realExpensesOfYear ?? null,
+        exceptionalExpenses: summary.exceptionalExpensesOfYear ?? null,
+      }
+    } catch {
+      familiesOfYear.value = null
+    }
+  }
+
   onMounted(() => {
     void loadTags()
     void tagsStore.fetchFamilies()
+    void loadFamiliesOfYear()
   })
 </script>
 
@@ -300,6 +345,15 @@
     <PageHeader
       title="Étiquettes"
       subtitle="Regroupez des transactions (événement, vacances…) et analysez-les."
+    />
+
+    <!-- The families over the year, first: what the episodes cost. -->
+    <TagFamiliesOfYearCard
+      v-if="familiesOfYear && familiesOfYear.families.length > 0"
+      class="mb-6"
+      :families="familiesOfYear.families"
+      :real-expenses="familiesOfYear.realExpenses"
+      :exceptional-expenses="familiesOfYear.exceptionalExpenses"
     />
 
     <!-- Create form -->
