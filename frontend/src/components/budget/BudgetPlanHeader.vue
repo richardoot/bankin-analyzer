@@ -1,16 +1,17 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import type { BudgetPlanDto } from '@/lib/api'
-  import { formatCurrency, formatDate } from '@/lib/formatters'
+  import { formatDate } from '@/lib/formatters'
   import { planStatus } from './planStatus'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import IconClock from '@/components/icons/IconClock.vue'
   import IconPlus from '@/components/icons/IconPlus.vue'
 
   /**
-   * The plan introducing itself: name, status badge, date span, the
-   * savings/projects equation decided at creation — and the two header
-   * actions. The outcome of a save is not said here: it belongs next to
+   * The plan introducing itself: name, status badge, date span — and the
+   * two header actions. The savings decided at creation are read in the
+   * band of the month (BudgetMonthBand), the projects reserve with the
+   * projects of the period. The outcome of a save is not said here: it belongs next to
    * the button that asked for it, in BudgetEditBar.
    *
    * Everything shown derives from the plan itself; the page only says
@@ -93,35 +94,6 @@
         </span>
         <span class="text-gray-500 dark:text-gray-400">
           ({{ plan.monthCount }} mois)
-        </span>
-      </p>
-      <!-- The plan's equation, when one was decided at creation. -->
-      <p
-        v-if="
-          plan &&
-          plan.projectReserve !== null &&
-          plan.projectReserve !== undefined
-        "
-        data-testid="plan-project-reserve"
-        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-      >
-        Épargne décidée
-        <strong class="text-gray-700 dark:text-gray-300 tabular-nums">
-          {{ formatCurrency(plan.savingsTarget ?? 0) }} / mois
-        </strong>
-        · Budget projets
-        <strong
-          class="tabular-nums"
-          :class="
-            plan.projectReserve < 0
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-gray-700 dark:text-gray-300'
-          "
-        >
-          {{ formatCurrency(plan.projectReserve) }}
-        </strong>
-        <span v-if="plan.projectReserve < 0">
-          — ce plan ne tient pas dans les revenus prévus
         </span>
       </p>
     </div>

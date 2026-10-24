@@ -10,7 +10,8 @@
     TagBudgetSummaryDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
-  import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
+  import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
+  import { budgetMonthReading } from '@/lib/budgetMonth'
   import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
@@ -111,11 +112,29 @@
   useSuppressTabBar(() => isEditing.value || saveStatus.value === 'saved')
 
   /**
-   * The plan month the page is reading, or null for the average over every
-   * complete month. Not persisted: which month you want to look at is a
-   * question of the moment, unlike the breakdown mode.
+   * The month the user picked in « Mois lu »: a plan month, null for
+   * « Moyenne du plan », undefined while nothing was picked — the page then
+   * reads its default. Not persisted: which month you want to look at is a
+   * question of the moment, unlike the reading. A plan switch drops it.
    */
-  const selectedMonth = ref<string | null>(null)
+  const monthChoice = ref<string | null | undefined>(undefined)
+
+  /**
+   * The plan month the page is reading, or null for the average over every
+   * complete month. By default the running month while the plan runs —
+   * « Ce mois-ci » is what the page is opened for — and the average
+   * otherwise (a finished plan, one not begun yet).
+   */
+  const selectedMonth = computed<string | null>(() => {
+    if (monthChoice.value !== undefined) return monthChoice.value
+    const current = plan.value
+    if (!current) return null
+    const running = currentYearMonth()
+    return running >= current.startDate.slice(0, 7) &&
+      running <= current.endDate.slice(0, 7)
+      ? running
+      : null
+  })
 
   const expandedCategories = ref<Set<string>>(new Set())
 
@@ -371,28 +390,28 @@
     }
   })
 
-  /** Plan-zone aggregates (income + expense averages). */
-  const planAggregates = computed(() =>
-    comparison.aggregatesFor(visibleExpenseCategories.value)
-  )
+  /** Plan-zone income averages. */
   const planIncomeAggregates = computed(() =>
     comparison.incomeAggregates(visibleIncomeCategories.value)
   )
 
   const planIncomeAvg = computed(() => planIncomeAggregates.value.planIncomeAvg)
 
-  /** Actual averages restricted to plan months that are complete. */
-  const planActualExpenseAvg = computed(
-    () => planAggregates.value.planActualExpenseAvg
-  )
-  const planActualIncomeAvg = computed(
-    () => planIncomeAggregates.value.planActualIncomeAvg
-  )
+  /**
+   * Income averaged over the complete plan months, whichever month is read:
+   * a running month has received part of its income only.
+   */
+  const completeMonthsIncomeAvg = computed(() => {
+    const indices = comparison.completePlanIndices.value
+    if (indices.length === 0) return 0
+    let total = 0
+    for (const cat of visibleIncomeCategories.value) {
+      for (const i of indices) total += cat.monthlyAmounts?.[i] ?? 0
+    }
+    return total / indices.length
+  })
 
-  /** Comparison-zone aggregates — null when no comparison selected. */
-  const comparisonExpenseAvg = computed(
-    () => planAggregates.value.comparisonExpenseAvg
-  )
+  /** Comparison-zone income — zero when no comparison selected. */
   const comparisonIncomeAvg = computed(
     () => planIncomeAggregates.value.comparisonIncomeAvg
   )
@@ -412,7 +431,7 @@
    *   4. the raw plan average as a last resort.
    */
   const chartAverageIncome = computed(() => {
-    if (planActualIncomeAvg.value > 0) return planActualIncomeAvg.value
+    if (completeMonthsIncomeAvg.value > 0) return completeMonthsIncomeAvg.value
     if (comparisonIncomeAvg.value > 0) return comparisonIncomeAvg.value
     if (planToDateIncomeAvg.value > 0) return planToDateIncomeAvg.value
     return planIncomeAvg.value
@@ -425,18 +444,6 @@
    * otherwise vanish from the summary while the edit bar still counts it).
    */
   const totalBudget = computed(() => draftPlanTotal.value)
-
-  /**
-   * Comparison props for the savings summary — null when no comparison is set.
-   */
-  const summaryComparisonProps = computed(() => {
-    if (!comparisonRange.value) return null
-    return {
-      label: comparisonRange.value.label,
-      incomeAvg: comparisonIncomeAvg.value,
-      expenseAvg: comparisonExpenseAvg.value,
-    }
-  })
 
   const monthlyTotalExpenses = computed(() => {
     const cats = visibleExpenseCategories.value
@@ -574,12 +581,50 @@
   }
 
   function selectMonth(ym: string | null): void {
-    selectedMonth.value = ym
+    monthChoice.value = ym
   }
 
-  // Isolating a month happens in one place, the period band above the table
-  // (BudgetTableControls): the chart and the month-by-month grid only reflect
-  // the choice. Three places to set the same thing were two too many.
+  // Isolating a month happens in one place, « Mois lu » in the band of the
+  // month (BudgetMonthBand): the rows, the chart and the month-by-month grid
+  // only reflect the choice.
+
+  /**
+   * « Ce mois-ci »: the month read, from the started plan months and each
+   * category's spending in them, in the active reading.
+   */
+  const monthReading = computed(() => {
+    const current = plan.value
+    if (!current) return null
+    const indices = comparison.startedPlanIndices.value
+    return budgetMonthReading({
+      plan: current,
+      months: comparison.startedPlanMonths.value,
+      completeMonthsCount: comparison.completePlanMonthsCount.value,
+      selectedMonth: rowSelectedMonth.value,
+      progress: comparison.selectedMonthProgress.value,
+      categories: visibleExpenseCategories.value.map(cat => {
+        const series = comparison.seriesFor(cat)
+        return {
+          categoryId: cat.categoryId,
+          categoryName: cat.categoryName,
+          amounts: indices.map(i => series?.[i] ?? 0),
+        }
+      }),
+      income: indices.map(i =>
+        visibleIncomeCategories.value.reduce(
+          (total, cat) => total + (cat.monthlyAmounts?.[i] ?? 0),
+          0
+        )
+      ),
+    })
+  })
+
+  /** « Voir la ligne »: the first envelope spent past, brought into view. */
+  function showEnvelope(categoryId: string): void {
+    document
+      .getElementById(`budget-row-${categoryId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   /** Label describing what the "Réel" figures currently cover. */
   const actualPeriodLabel = computed(() => {
@@ -773,7 +818,7 @@
     plan.value = null
     statistics.value = null
     adoptPlanEntries(null)
-    selectedMonth.value = null
+    monthChoice.value = undefined
     expandedCategories.value = new Set()
 
     isLoading.value = true
@@ -801,8 +846,8 @@
       plan.value = loaded
       adoptPlanEntries(loaded)
       // The months on offer belong to the plan that was showing, not to this
-      // one: keep the new plan on its average until the user picks again.
-      selectedMonth.value = null
+      // one: the new plan opens on its default month until the user picks.
+      monthChoice.value = undefined
       isHistoryOpen.value = false
       // The projects too: they are read over the plan's own window.
       await Promise.all([
@@ -826,7 +871,7 @@
   async function onPlanCreated(created: BudgetPlanDto) {
     plan.value = created
     adoptPlanEntries(created)
-    selectedMonth.value = null
+    monthChoice.value = undefined
     isModalOpen.value = false
     planCount.value++
     await Promise.all([
@@ -1180,22 +1225,20 @@
 
     <!-- Plan content -->
     <template v-else>
-      <!-- The verdict first — « am I on track » is what the page is opened
-           for — then the chart it is read from. -->
-      <div class="mb-6">
-        <BudgetSavingsSummary
-          :plan-label="plan.name"
-          :plan-income-avg="chartAverageIncome"
-          :plan-budget-total="totalBudget"
-          :plan-actual-expense-avg="planActualExpenseAvg"
-          :plan-actual-income-avg="planActualIncomeAvg"
-          :complete-plan-months-count="comparison.completePlanMonthsCount.value"
-          :is-plan-finished="comparison.isPlanFinished.value"
-          :actual-period-label="selectedMonth ? actualPeriodLabel : null"
-          :month-progress="comparison.selectedMonthProgress.value"
-          :comparison="summaryComparisonProps"
-        />
-      </div>
+      <!-- « Ce mois-ci » first: holding the month is what the page is
+           opened for. « Mois lu » lives in its header and steers the rows. -->
+      <BudgetMonthBand
+        v-if="monthReading"
+        class="mb-6"
+        :reading="monthReading"
+        :plan-start="plan.startDate"
+        :month-options="monthOptions"
+        :selected-month="rowSelectedMonth"
+        :complete-months-count="comparison.completePlanMonthsCount.value"
+        @select-month="selectMonth"
+        @show-envelope="showEnvelope"
+        @edit="enterEditMode"
+      />
 
       <!-- Monthly expenses chart -->
       <BaseCard
@@ -1236,14 +1279,9 @@
         <BudgetTableControls
           v-model:sort-order="sortOrder"
           :editing="isEditing"
-          :month-options="monthOptions"
-          :selected-month="selectedMonth"
-          :complete-months-count="comparison.completePlanMonthsCount.value"
-          :actual-period-label="actualPeriodLabel"
           :plan-is-past="planStatus(plan) === 'past'"
           :averages-source="averagesSource"
           @enter-edit="enterEditMode"
-          @select-month="selectMonth"
           @apply-averages="applyAverageToAll"
           @adjust-percent="adjustAllByPercent"
           @reset="resetAllBudgets"
@@ -1347,6 +1385,7 @@
           >
             <BudgetCategoryRow
               v-for="cat in sortedCategories"
+              :id="`budget-row-${cat.categoryId}`"
               :key="cat.categoryId"
               :category="cat"
               :expanded="isCategoryExpanded(cat.categoryId)"

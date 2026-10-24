@@ -1,31 +1,20 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
   import { SORT_OPTIONS, type SortOrder } from './sortOptions'
-  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
-  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import IconPencil from '@/components/icons/IconPencil.vue'
 
   /**
    * Everything that steers the category table without being a row of it:
-   * entering edit mode, sorting, the month selector, the comparison (the
-   * `comparison` slot, which the page fills in edit mode only), the
-   * closed-period warning and the edit-mode quick actions. The reading
-   * (Vie courante / Tout) is the page's « Lecture » menu, not a control of
-   * the table. Pure controls — every decision leaves as an event, every
+   * entering edit mode, sorting, the comparison (the `comparison` slot,
+   * which the page fills in edit mode only), the closed-period warning and
+   * the edit-mode quick actions. The reading (Vie courante / Tout) is the
+   * page's « Lecture » menu, and the month read is « Mois lu » in the band
+   * of the month (BudgetMonthBand): neither is a control of the table.
+   * Pure controls — every decision leaves as an event, every
    * figure arrives as a prop.
    */
-  const props = defineProps<{
+  defineProps<{
     editing: boolean
-    monthOptions: {
-      ym: string
-      short: string
-      full: string
-      isRunning: boolean
-    }[]
-    selectedMonth: string | null
-    completeMonthsCount: number
-    actualPeriodLabel: string
     planIsPast: boolean
     /** Which reference « Appliquer les moyennes » would copy into the envelopes. */
     averagesSource: 'historical' | 'actual' | 'none'
@@ -33,31 +22,10 @@
 
   const emit = defineEmits<{
     'enter-edit': []
-    'select-month': [ym: string | null]
     'apply-averages': []
     'adjust-percent': [percent: number]
     reset: []
   }>()
-  const monthSegments = computed<SegmentedOption<string | null>[]>(() => [
-    {
-      value: null,
-      label: `Moyenne (${props.completeMonthsCount} mois)`,
-      testId: 'budget-month-average',
-    },
-    ...props.monthOptions.map(option => ({
-      value: option.ym,
-      label: option.short,
-      testId: `budget-month-${option.ym}`,
-      title: option.full,
-    })),
-  ])
-  const runningMonths = computed(
-    () =>
-      new Set<string | null>(
-        props.monthOptions.filter(m => m.isRunning).map(m => m.ym)
-      )
-  )
-
   const sortOrder = defineModel<SortOrder>('sortOrder', {
     default: 'amount-desc',
   })
@@ -108,42 +76,6 @@
     <!-- « Comparer avec », when the page gives it: in edit mode only. -->
     <div v-if="$slots.comparison" class="mb-4">
       <slot name="comparison" />
-    </div>
-
-    <!-- Month selector: the plan averaged, or one month on its own.
-         A budget is already a monthly figure, so on a single month the
-         comparison needs no averaging at all. -->
-    <div
-      v-if="monthOptions.length > 0"
-      data-testid="budget-month-selector"
-      class="mb-4 flex flex-wrap items-center gap-2"
-    >
-      <span class="mr-1 shrink-0 text-xs text-gray-500 dark:text-gray-400">
-        Période :
-      </span>
-      <!-- The one place a month is isolated: the chart and the grid follow. -->
-      <SegmentedControl
-        :model-value="selectedMonth"
-        :options="monthSegments"
-        size="sm"
-        scrollable
-        label="Période du tableau"
-        @update:model-value="emit('select-month', $event)"
-      >
-        <template #option="{ option }">
-          <span
-            v-if="runningMonths.has(option.value)"
-            class="ml-1 text-amber-500"
-            >●</span
-          >
-        </template>
-      </SegmentedControl>
-      <span
-        data-testid="budget-actual-period"
-        class="shrink-0 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400"
-      >
-        {{ actualPeriodLabel }}
-      </span>
     </div>
 
     <!-- Rewriting the envelopes of a closed period moves the gap on a

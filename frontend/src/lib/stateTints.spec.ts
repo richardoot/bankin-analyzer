@@ -17,6 +17,7 @@ const dashboardSources = import.meta.glob<string>(
     '../views/DashboardPage.vue',
     '../components/charts/IncomeExpensesChart.vue',
     '../components/charts/YearColumnsChart.vue',
+    '../components/budget/BudgetMonthBand.vue',
   ],
   { query: '?raw', import: 'default', eager: true }
 )
@@ -49,6 +50,7 @@ describe('the state tints', () => {
       expect.arrayContaining([
         '../views/DashboardPage.vue',
         '../components/dashboard/MonthBand.vue',
+        '../components/budget/BudgetMonthBand.vue',
       ])
     )
   })
