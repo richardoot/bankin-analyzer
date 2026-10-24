@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import {
+    NATURE_FIGURE_CLASSES,
     STATE_BADGE_CLASSES,
     deltaTone,
     gapOf,
@@ -223,12 +224,13 @@
             placeholder="—"
             aria-describedby="budget-reference-income-detail"
             data-testid="budget-reference-income-input"
-            class="w-full min-h-[40px] rounded-md border py-1 pl-2 pr-14 text-[22px] leading-tight font-semibold text-gray-900 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-2xl dark:text-gray-100"
-            :class="
+            class="w-full min-h-[40px] rounded-md border py-1 pl-2 pr-14 text-[22px] leading-tight font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500 sm:text-2xl"
+            :class="[
+              NATURE_FIGURE_CLASSES.income,
               incomeChanged
                 ? 'border-primary-500 bg-primary-50 dark:border-primary-500 dark:bg-primary-900/20'
-                : 'border-gray-300 bg-white dark:border-slate-600 dark:bg-slate-900'
-            "
+                : 'border-gray-300 bg-white dark:border-slate-600 dark:bg-slate-900',
+            ]"
             @input="onIncomeInput"
           />
           <span
@@ -249,7 +251,10 @@
       <!-- The draft's total, at each keystroke, against the saved one. -->
       <article :class="TILE" data-testid="budget-tile-total">
         <h3 :class="TILE_TITLE">Budget total</h3>
-        <p :class="FIGURE" data-testid="budget-planning-value-total">
+        <p
+          :class="figureClass('expense')"
+          data-testid="budget-planning-value-total"
+        >
           {{ euros(draftTotal) }}<span :class="FIGURE_UNIT"> par mois</span>
         </p>
         <p :class="BADGE_LINE">
@@ -271,7 +276,7 @@
         <h3 :class="TILE_TITLE">Épargne prévue</h3>
         <template v-if="savingsTile">
           <p
-            :class="figureClass(savingsTile.negative)"
+            :class="figureClass('savings', savingsTile.negative)"
             data-testid="budget-planning-value-savings"
           >
             {{ euros(savingsTile.value)

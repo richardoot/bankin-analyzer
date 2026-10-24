@@ -259,7 +259,10 @@
       <article :class="TILE" data-testid="budget-tile-spent">
         <h3 :class="TILE_TITLE">Dépensé</h3>
         <template v-if="spentTile">
-          <p :class="FIGURE" data-testid="budget-month-value-spent">
+          <p
+            :class="figureClass('expense')"
+            data-testid="budget-month-value-spent"
+          >
             {{ euros(spentTile.value)
             }}<span v-if="isPlan" :class="FIGURE_UNIT"> par mois</span>
           </p>
@@ -298,7 +301,7 @@
         <h3 :class="TILE_TITLE">Épargne réalisée</h3>
         <template v-if="savingsTile">
           <p
-            :class="figureClass(savingsTile.negative)"
+            :class="figureClass('savings', savingsTile.negative)"
             data-testid="budget-month-value-savings"
           >
             {{ euros(savingsTile.value)

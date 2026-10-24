@@ -5,6 +5,7 @@
   import { DASHBOARD_THRESHOLDS } from '@/lib/dashboardThresholds'
   import {
     DATA_HUE,
+    NATURE_FIGURE_CLASSES,
     STATE_BADGE_CLASSES,
     STATE_COLORS,
     gapOf,
@@ -22,9 +23,12 @@
    * at this point of the month, the income, what is still to come, what is
    * left to live on.
    *
-   * The figures are in the text's ink; the colour carries the state alone:
-   * teal under the habit, amber over it, grey within ±5 % or when there is
-   * nothing to compare. Never red. Presentational: the page owns the
+   * Each figure wears its nature's hue (`NATURE_FIGURE_CLASSES`: blue for
+   * what goes out, green for what comes in, violet for what stays); the
+   * badge carries the state alone: teal under the habit, amber over it,
+   * grey within ±5 % or when there is nothing to compare. Never red. An
+   * overspent « Reste à vivre » takes the state's amber on its figure.
+   * Presentational: the page owns the
    * request (`useMonthData`) and a failure stays here, with its retry.
    */
   const props = withDefaults(
@@ -236,7 +240,8 @@
           {{ spentTile.label }}
         </h3>
         <p
-          class="text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl tabular-nums"
+          :class="NATURE_FIGURE_CLASSES.expense"
           data-testid="month-value-spent"
         >
           {{ euros(data.spent) }}
@@ -286,7 +291,8 @@
           Revenus
         </h3>
         <p
-          class="text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl tabular-nums"
+          :class="NATURE_FIGURE_CLASSES.income"
           data-testid="month-value-income"
         >
           {{ euros(data.incomeReceived) }}
@@ -329,7 +335,8 @@
           À venir
         </h3>
         <p
-          class="text-[22px] leading-tight font-semibold sm:text-2xl text-gray-900 tabular-nums dark:text-gray-100"
+          class="text-[22px] leading-tight font-semibold sm:text-2xl tabular-nums"
+          :class="NATURE_FIGURE_CLASSES.expense"
           data-testid="month-value-upcoming"
         >
           {{ euros(data.upcomingTotal) }}
@@ -387,7 +394,7 @@
           :class="
             remainingTile.overspent
               ? 'text-amber-700 dark:text-amber-400'
-              : 'text-gray-900 dark:text-gray-100'
+              : NATURE_FIGURE_CLASSES.savings
           "
           data-testid="month-value-remaining"
         >

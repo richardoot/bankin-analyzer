@@ -164,3 +164,10 @@ Backend : `dashboard.service.ts`, `dto/dashboard-summary-response.dto.ts`. Front
 2. **L'habitude en lecture « Tout »** : la médiane des dépenses nettes totales, événements compris (proposé, cohérent avec la lecture), ou toujours la vie courante avec les événements à part.
 3. **« À venir » et les récurrences en retard** : une récurrence `ACTIVE` dont `nextExpected` est déjà passé sans transaction ce mois-ci compte-t-elle dans « à venir » ? Proposé : oui, jusqu'à la fin du mois, avec « attendu le N » en gris.
 4. **Le mois lu par « Ce qui change » quand la période du tableau de bord s'arrête dans le passé** : question ouverte du cadrage des tendances, toujours ouverte ; la carte compacte lit le dernier mois clos du registre.
+
+## Remarques du 2026-10-25 après livraison
+
+Deux remarques de Richard sur la page livrée (24b1523), appliquées sur `main` :
+
+- **« À faire » en dernière section**, après « Où part l'argent », comme sur la page Budget : la page se lit d'abord, les corvées viennent après. La « maquette A » et le lot 3 la plaçaient entre « Ce qui change » et « Où part l'argent ».
+- **Les montants des quatre tuiles de « Ce mois-ci » prennent la teinte de leur nature** : bleu pour une dépense (Dépenses / Vie courante, À venir), vert pour les Revenus, violet pour le Reste à vivre (une épargne : revenus − dépenses). Un reste dépassé garde l'ambre. La règle « les chiffres en encre de texte » des « Décisions prises » ne vaut plus pour les tuiles des bandes ; elle tient partout ailleurs (design-system § 5.5, exception du 2026-10-25, `NATURE_FIGURE_CLASSES`). Même traitement sur les trois bandes du budget.

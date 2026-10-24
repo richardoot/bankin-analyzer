@@ -146,6 +146,19 @@ describe('BudgetReviewBand', () => {
     )
   })
 
+  it('colours the figures by nature: the spending blue, the saving violet, a count in ink', () => {
+    const wrapper = mountBand()
+    expect(
+      wrapper.get('[data-testid="budget-month-value-spent"]').classes()
+    ).toContain('text-blue-700')
+    expect(
+      wrapper.get('[data-testid="budget-month-value-savings"]').classes()
+    ).toContain('text-violet-700')
+    expect(
+      wrapper.get('[data-testid="budget-month-value-envelopes"]').classes()
+    ).toContain('text-gray-900')
+  })
+
   it('reads the savings made against the decided ones', () => {
     const wrapper = mountBand()
     const tile = wrapper.get('[data-testid="budget-tile-savings"]')

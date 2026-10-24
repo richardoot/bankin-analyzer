@@ -131,10 +131,10 @@ describe('BudgetMonthBand', () => {
     expect(text(tile.get('[data-testid="budget-detail-spent"]').text())).toBe(
       '1 373 € d’enveloppe au 23 · 1 850 € pour le mois'
     )
-    // The figure is in ink, never in a state colour.
+    // The figure wears the spending's blue, never a state colour.
     expect(
       tile.get('[data-testid="budget-month-value-spent"]').classes()
-    ).toContain('text-gray-900')
+    ).toContain('text-blue-700')
   })
 
   it('draws the plan months, the envelope as reference', () => {

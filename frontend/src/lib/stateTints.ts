@@ -42,6 +42,26 @@ export const DATA_HUE = '#60a5fa'
 export const INCOME_LINE_COLOR = '#16a34a'
 
 /**
+ * The nature of a figure in a band's tiles — « Ce mois-ci » on the
+ * dashboard, the budget's three bands: what goes out, what comes in, what
+ * stays. Richard's decision of 2026-10-25, the second exception to « the
+ * figures are in ink »: four tiles side by side read faster when the
+ * amount itself says which is which. Blue is the columns' hue
+ * (`DATA_HUE`), green the income line's (`INCOME_LINE_COLOR`), violet the
+ * saving's own — none of the three state tints, so a figure's hue never
+ * says a state. A shortfall (a negative saving, an overrun) keeps the
+ * state's amber: the state wins over the nature. A count, a margin, a
+ * placeholder stay in ink.
+ */
+export type NatureKind = 'expense' | 'income' | 'savings'
+
+export const NATURE_FIGURE_CLASSES: Readonly<Record<NatureKind, string>> = {
+  expense: 'text-blue-700 dark:text-blue-400',
+  income: 'text-green-700 dark:text-green-400',
+  savings: 'text-violet-700 dark:text-violet-400',
+}
+
+/**
  * A gap to a reference, as a share of it: `under` below it, `over` above
  * it, `neutral` within ±5 % (`DASHBOARD_THRESHOLDS.neutralGap`) or when
  * there is no reference to compare with. Shared by « Ce mois-ci » on the

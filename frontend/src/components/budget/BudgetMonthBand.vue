@@ -276,7 +276,10 @@
       <!-- Before the plan: what it will hold, no spending yet. -->
       <article v-if="isFuture" :class="TILE" data-testid="budget-tile-envelope">
         <h3 :class="TILE_TITLE">Enveloppe</h3>
-        <p :class="FIGURE" data-testid="budget-month-value-envelope">
+        <p
+          :class="figureClass('expense')"
+          data-testid="budget-month-value-envelope"
+        >
           {{ euros(reading.envelope)
           }}<span :class="FIGURE_UNIT"> par mois</span>
         </p>
@@ -289,7 +292,10 @@
       <!-- Spent, against the envelope at this point of the month. -->
       <article v-if="spentTile" :class="TILE" data-testid="budget-tile-spent">
         <h3 :class="TILE_TITLE">Dépensé</h3>
-        <p :class="FIGURE" data-testid="budget-month-value-spent">
+        <p
+          :class="figureClass('expense')"
+          data-testid="budget-month-value-spent"
+        >
           {{ euros(spentTile.value) }}
         </p>
         <p
@@ -330,7 +336,7 @@
       >
         <h3 :class="TILE_TITLE">Reste à dépenser</h3>
         <p
-          :class="figureClass(remainingTile.overspent)"
+          :class="figureClass('expense', remainingTile.overspent)"
           data-testid="budget-month-value-remaining"
         >
           {{ euros(remainingTile.value) }}
@@ -352,7 +358,7 @@
         <h3 :class="TILE_TITLE">Épargne</h3>
         <template v-if="savingsTile">
           <p
-            :class="figureClass(savingsTile.negative)"
+            :class="figureClass('savings', savingsTile.negative)"
             data-testid="budget-month-value-savings"
           >
             {{ euros(savingsTile.value)

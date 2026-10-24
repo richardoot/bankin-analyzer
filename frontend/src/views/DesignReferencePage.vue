@@ -33,7 +33,11 @@
   import TodoCard from '@/components/dashboard/TodoCard.vue'
   import StructureLines from '@/components/dashboard/StructureLines.vue'
   import PeriodSummaryLines from '@/components/dashboard/PeriodSummaryLines.vue'
-  import { DATA_HUE, STATE_BADGE_CLASSES } from '@/lib/stateTints'
+  import {
+    DATA_HUE,
+    NATURE_FIGURE_CLASSES,
+    STATE_BADGE_CLASSES,
+  } from '@/lib/stateTints'
   import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
   import BudgetReviewBand from '@/components/budget/BudgetReviewBand.vue'
   import BudgetPlanningBand from '@/components/budget/BudgetPlanningBand.vue'
@@ -853,13 +857,44 @@
           Teintes d'état
         </h2>
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          Sur le tableau de bord et le budget, les chiffres sont à l'encre du
-          texte ; la couleur ne dit qu'un état, en trois teintes tirées de
+          Sur le tableau de bord et le budget, un chiffre d'une tuile porte la
+          teinte de sa nature (bleu pour une dépense, vert pour un revenu,
+          violet pour une épargne), les autres chiffres sont à l'encre du texte
+          ; l'état ne se dit que dans le badge, en trois teintes tirées de
           <code class="font-mono text-xs">lib/stateTints</code>. L'ambre sert
-          aussi « À faire », et rien d'autre ; jamais de rouge ni de vert sur
-          une donnée. La donnée elle-même (une barre, la ligne d'une sparkline)
-          a une seule teinte.
+          aussi « À faire » et un manque sur un chiffre, et rien d'autre ;
+          jamais de rouge. La donnée elle-même (une barre, la ligne d'une
+          sparkline) a une seule teinte.
         </p>
+        <ul
+          class="mb-4 grid gap-3 text-sm sm:grid-cols-3"
+          data-testid="design-nature-hues"
+        >
+          <li class="flex items-baseline gap-2">
+            <span
+              class="text-xl font-semibold tabular-nums"
+              :class="NATURE_FIGURE_CLASSES.expense"
+              >1 850 €</span
+            >
+            <span class="text-gray-700 dark:text-gray-300">dépense</span>
+          </li>
+          <li class="flex items-baseline gap-2">
+            <span
+              class="text-xl font-semibold tabular-nums"
+              :class="NATURE_FIGURE_CLASSES.income"
+              >3 200 €</span
+            >
+            <span class="text-gray-700 dark:text-gray-300">revenu</span>
+          </li>
+          <li class="flex items-baseline gap-2">
+            <span
+              class="text-xl font-semibold tabular-nums"
+              :class="NATURE_FIGURE_CLASSES.savings"
+              >1 350 €</span
+            >
+            <span class="text-gray-700 dark:text-gray-300">épargne</span>
+          </li>
+        </ul>
         <ul class="grid gap-3 text-sm sm:grid-cols-2">
           <li class="flex items-center gap-3">
             <span

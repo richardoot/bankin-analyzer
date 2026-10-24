@@ -28,7 +28,12 @@ describe('DesignReferencePage — the dashboard', () => {
     expect(tints.html()).toContain('bg-teal-50')
     expect(tints.html()).toContain('bg-amber-50')
     expect(tints.html()).toContain('bg-gray-100')
-    expect(tints.text()).toContain('jamais de rouge ni de vert')
+    expect(tints.text()).toContain('jamais de rouge')
+    // The three natures of a figure, beside the three states.
+    const natures = tints.get('[data-testid="design-nature-hues"]')
+    expect(natures.html()).toContain('text-blue-700')
+    expect(natures.html()).toContain('text-green-700')
+    expect(natures.html()).toContain('text-violet-700')
   })
 
   it('mounts the four bricks of the page', async () => {
@@ -83,7 +88,9 @@ describe('DesignReferencePage — the dashboard', () => {
     expect(section.find('[data-testid="month-tile-spent"]').exists()).toBe(
       false
     )
-    expect(section.html()).not.toMatch(/\btext-(?:red|green)-\d/)
+    // Never red; green only marks an income's figure, never a state.
+    expect(section.html()).not.toMatch(/\btext-red-\d/)
+    expect(section.html()).not.toMatch(/\bbg-green-\d/)
   })
 })
 
@@ -102,7 +109,12 @@ describe('DesignReferencePage — the budget', () => {
       expect(section.find(`[data-testid="${id}"]`).exists(), id).toBe(true)
     }
     expect(section.text()).toContain('Les teintes d’état valent pour le budget')
-    expect(section.html()).not.toMatch(/(?:text|bg)-(?:red|green)-\d/)
+    expect(section.html()).not.toMatch(/(?:text|bg)-red-\d/)
+    // The only green: the reference income's figure, by its nature.
+    expect(section.html()).not.toMatch(/\bbg-green-\d/)
+    expect(
+      section.get('[data-testid="budget-reference-income-input"]').classes()
+    ).toContain('text-green-700')
   })
 
   it('lets « Mois lu » read another month', async () => {

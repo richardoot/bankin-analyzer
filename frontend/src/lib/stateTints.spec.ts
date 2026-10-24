@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DATA_HUE,
+  NATURE_FIGURE_CLASSES,
   STATE_BADGE_CLASSES,
   STATE_COLORS,
   deltaTone,
@@ -13,7 +14,9 @@ import {
  * state tints (agent-os/product/design-system.md) holds in the code, not
  * only in the components a spec happens to mount. Every budget component,
  * the creation wizard's steps included, and the page; the page's error
- * goes through InlineAlert, the one place red is written.
+ * goes through InlineAlert, the one place red is written. The green of an
+ * income figure comes from `NATURE_FIGURE_CLASSES` alone, never written
+ * in a component.
  */
 const dashboardSources = import.meta.glob<string>(
   [
@@ -38,6 +41,16 @@ describe('the state tints', () => {
       neutral: '#9ca3af',
     })
     expect(DATA_HUE).toBe('#60a5fa')
+  })
+
+  it('names three natures for a figure, none in a state tint', () => {
+    expect(NATURE_FIGURE_CLASSES.expense).toContain('text-blue-700')
+    expect(NATURE_FIGURE_CLASSES.income).toContain('text-green-700')
+    expect(NATURE_FIGURE_CLASSES.savings).toContain('text-violet-700')
+    for (const classes of Object.values(NATURE_FIGURE_CLASSES)) {
+      expect(classes).not.toMatch(/teal|amber|gray|red/)
+      expect(classes).toMatch(/\bdark:text-/)
+    }
   })
 
   it('reads a gap to a reference in three tones, ±5 % neutral', () => {

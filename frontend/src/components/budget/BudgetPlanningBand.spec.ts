@@ -59,6 +59,22 @@ describe('BudgetPlanningBand', () => {
       expect(w.find(`[data-testid="budget-tile-${name}"]`).exists()).toBe(true)
   })
 
+  it('colours the figures by nature: the income green, the total blue, the saving violet, the margin in ink', () => {
+    const w = mountBand()
+    expect(
+      w.get('[data-testid="budget-reference-income-input"]').classes()
+    ).toContain('text-green-700')
+    expect(
+      w.get('[data-testid="budget-planning-value-total"]').classes()
+    ).toContain('text-blue-700')
+    expect(
+      w.get('[data-testid="budget-planning-value-savings"]').classes()
+    ).toContain('text-violet-700')
+    expect(
+      w.get('[data-testid="budget-planning-value-margin"]').classes()
+    ).toContain('text-gray-900')
+  })
+
   it('carries the reference income in a field, said as entered at creation', async () => {
     const w = mountBand()
     const input = w.get('[data-testid="budget-reference-income-input"]')

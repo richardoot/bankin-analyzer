@@ -142,14 +142,25 @@ describe('MonthBand', () => {
       expect(nearBadge.attributes('data-tone')).toBe('neutral')
     })
 
-    it('never colours a figure, and never uses red', () => {
+    it('colours a figure by its nature, never by its state, and never red', () => {
       const wrapper = mountBand({
-        data: { ...OCTOBER, spent: 3000, remainingToLive: -1300 },
+        data: { ...OCTOBER, spent: 3000 },
       })
 
+      // Blue for what goes out, green for what comes in, violet for what
+      // stays: the hue says which tile is which, the badge says the state.
       expect(
         wrapper.get('[data-testid="month-value-spent"]').classes()
-      ).toContain('text-gray-900')
+      ).toContain('text-blue-700')
+      expect(
+        wrapper.get('[data-testid="month-value-upcoming"]').classes()
+      ).toContain('text-blue-700')
+      expect(
+        wrapper.get('[data-testid="month-value-income"]').classes()
+      ).toContain('text-green-700')
+      expect(
+        wrapper.get('[data-testid="month-value-remaining"]').classes()
+      ).toContain('text-violet-700')
       expect(wrapper.html()).not.toMatch(/(text|bg|border)-red-/)
     })
 

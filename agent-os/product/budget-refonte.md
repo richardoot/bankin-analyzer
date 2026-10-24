@@ -180,3 +180,7 @@ Ce que ça change aux « Décisions prises » :
 - « Comparer avec apparaît en tête des enveloppes » en édition : il vit sur la carte du graphique.
 - Le graphique n'est plus une ligne repliée sous la liste.
 - La charte : le vert revient sur une ligne de référence (les revenus du graphique du budget), jamais sur un chiffre.
+
+## Remarques du 2026-10-25 après livraison
+
+- **Les montants des tuiles des trois bandes prennent la teinte de leur nature** (décision de Richard, partagée avec le tableau de bord) : bleu pour une dépense (Enveloppe, Dépensé, Reste à dépenser, Budget total), vert pour un revenu (le champ Revenus de référence), violet pour une épargne (Épargne, Épargne réalisée, Épargne prévue). Un manque garde l'ambre ; Enveloppes, Projets, Marge vs historique restent à l'encre. `bandTiles.ts` : `figureClass(nature, manque)` ; source unique `NATURE_FIGURE_CLASSES` dans `stateTints.ts` ; design-system § 5.5.
