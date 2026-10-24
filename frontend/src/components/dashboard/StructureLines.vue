@@ -171,9 +171,11 @@
     <template v-for="item in lines" :key="item.key">
       <div
         :data-testid="`structure-line-${item.key}`"
-        class="grid grid-cols-[auto_minmax(3rem,1fr)_auto] items-center gap-x-3 sm:grid-cols-[150px_minmax(0,1fr)_150px]"
+        class="grid grid-cols-2 items-center gap-x-3 gap-y-0.5 sm:grid-cols-[150px_minmax(0,1fr)_150px] sm:gap-y-0"
       >
-        <span class="flex min-w-0 items-center gap-1">
+        <!-- A phone: both labels on one line, the bar the full width
+             under them — between two labels it was 50px long. -->
+        <span class="col-start-1 row-start-1 flex min-w-0 items-center gap-1">
           <button
             :id="toggleId(item.left.key)"
             type="button"
@@ -201,7 +203,7 @@
         <div
           role="img"
           :aria-label="`${item.left.label} ${percent(item.left.share)}, ${item.right.label} ${percent(item.right.share)}`"
-          class="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+          class="col-span-2 row-start-2 h-2.5 overflow-hidden rounded-full bg-gray-100 sm:col-span-1 sm:col-start-2 sm:row-start-1 dark:bg-slate-800"
           :data-testid="`structure-track-${item.key}`"
         >
           <div
@@ -211,7 +213,9 @@
           />
         </div>
 
-        <span class="flex min-w-0 items-center justify-end gap-1">
+        <span
+          class="col-start-2 row-start-1 flex min-w-0 items-center justify-end gap-1 sm:col-start-3"
+        >
           <button
             :id="toggleId(item.right.key)"
             type="button"

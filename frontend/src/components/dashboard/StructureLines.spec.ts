@@ -108,6 +108,24 @@ describe('StructureLines', () => {
     }
   })
 
+  it('puts both labels on one line and the bar under them on a phone', () => {
+    const wrapper = mountLines()
+    for (const key of ['nature', 'rhythm']) {
+      const line = wrapper.get(`[data-testid="structure-line-${key}"]`)
+      expect(line.classes()).toEqual(
+        expect.arrayContaining([
+          'grid-cols-2',
+          'sm:grid-cols-[150px_minmax(0,1fr)_150px]',
+        ])
+      )
+      expect(
+        wrapper.get(`[data-testid="structure-track-${key}"]`).classes()
+      ).toEqual(
+        expect.arrayContaining(['col-span-2', 'row-start-2', 'sm:col-start-2'])
+      )
+    }
+  })
+
   it('says the committed spending per month, its recurring part, and links to the list', () => {
     const wrapper = mountLines()
 
