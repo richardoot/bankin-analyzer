@@ -18,6 +18,7 @@
   import IconCalendar from '@/components/icons/IconCalendar.vue'
   import IconCash from '@/components/icons/IconCash.vue'
   import IconCheck from '@/components/icons/IconCheck.vue'
+  import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
   import IconClock from '@/components/icons/IconClock.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import IconDocumentText from '@/components/icons/IconDocumentText.vue'
@@ -29,6 +30,15 @@
   import TransactionSettlementLinks from './TransactionSettlementLinks.vue'
   import { rowGridClass } from './rowGrid'
   import { smoothingEnded } from '@/lib/amortization'
+  import { availableAmountOf } from '@/lib/settlements'
+
+  /** The debt this income almost certainly repays (see `sureMatch`). */
+  export interface RowSettleMatch {
+    personId: string
+    personName: string
+    amount: number
+    description: string
+  }
 
   /**
    * One transaction, one declaration.
@@ -67,6 +77,10 @@
       isEditingNote?: boolean | undefined
       reimbursementsExpanded?: boolean | undefined
       settlementLoading?: boolean | undefined
+      /** An income that surely repays one pending debt: « Régler {personne} ». */
+      settleMatch?: RowSettleMatch | null | undefined
+      /** An income with cash left while debts are pending: settle any. */
+      settleAny?: boolean | undefined
     }>(),
     {
       selectionMode: false,
@@ -74,6 +88,8 @@
       isEditingNote: false,
       reimbursementsExpanded: false,
       settlementLoading: false,
+      settleMatch: null,
+      settleAny: false,
     }
   )
 
@@ -90,6 +106,10 @@
     'delete-reimbursement': [id: string]
     /** « Régler » on one open debt of the expense. */
     settle: [reimbursement: ReimbursementDto]
+    /** « Régler {personne} »: the income's sure match, pre-selected. */
+    'settle-match': []
+    /** « Régler une dette avec ce revenu » : every pending debt, none ticked. */
+    'settle-any': []
     'attach-tag': [id: string]
     'detach-tag': [id: string]
     'create-tag': [name: string]
@@ -183,6 +203,27 @@
       props.transaction.type === 'INCOME' &&
       (props.transaction.settlements ?? []).length > 0
   )
+  /**
+   * Settling from the income: only on an income that still has cash to
+   * give. The page decides whether a debt matches; the row re-checks the
+   * kind and the cash so a stale prop can never put it on an expense.
+   */
+  const canSettleFromIncome = computed(
+    () =>
+      props.transaction.type === 'INCOME' &&
+      availableAmountOf(props.transaction) > 0
+  )
+  const settleMatchShown = computed(() =>
+    canSettleFromIncome.value ? props.settleMatch : null
+  )
+  const settleAnyShown = computed(
+    () => canSettleFromIncome.value && props.settleAny
+  )
+  const settleMatchTitle = computed(() => {
+    const match = settleMatchShown.value
+    if (!match) return ''
+    return `Ce revenu correspond au remboursement de ${match.personName} (${match.description}, ${formatCurrency(match.amount)})`
+  })
   const canFollow = computed(
     () => isExpense.value && !props.transaction.recurrence
   )
@@ -262,6 +303,13 @@
         icon: IconCash,
         testId: 'row-menu-reimbursement',
       })
+    } else if (settleAnyShown.value) {
+      items.push({
+        key: 'settle',
+        label: 'Régler une dette avec ce revenu…',
+        icon: IconCash,
+        testId: 'row-menu-settle',
+      })
     }
     items.push({
       key: 'tag',
@@ -310,6 +358,9 @@
         break
       case 'reimbursement':
         emit('open-reimbursement')
+        break
+      case 'settle':
+        emit('settle-any')
         break
       case 'tag':
         // The panel hangs under the tags line; Escape returns to the menu.
@@ -431,10 +482,16 @@
               class="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"
             >
               <span class="shrink-0">{{ formatDate(transaction.date) }}</span>
-              <span class="text-gray-300 dark:text-gray-600" aria-hidden="true"
+              <!-- On a phone the pill below needs the room: the category
+                   stays one tap away, on the icon and the line. -->
+              <span
+                v-if="!settleMatchShown"
+                class="text-gray-300 dark:text-gray-600"
+                aria-hidden="true"
                 >&middot;</span
               >
               <button
+                v-if="!settleMatchShown"
                 type="button"
                 class="relative min-w-0 truncate transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3.5 pointer-coarse:before:content-[''] hover:text-gray-700 dark:hover:text-gray-300"
                 :title="categoryLabel"
@@ -473,6 +530,37 @@
                     {{ formatCurrency(reimbursementSummary.totalAmount) }}
                     <span class="opacity-70">en attente</span>
                   </template>
+                </button>
+              </template>
+              <!-- An income that surely repays a pending debt: the same pill,
+                   one tap from the settlement. No dot before it: the pill
+                   needs those pixels, its fill sets it apart already. -->
+              <template v-if="settleMatchShown">
+                <button
+                  type="button"
+                  class="relative inline-flex min-h-[24px] min-w-0 items-center gap-0.5 rounded-full sm:gap-1 bg-debt-100 px-1.5 text-[11px] font-medium text-debt-700 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:content-[''] hover:bg-debt-200 dark:bg-debt-900/30 dark:text-debt-300 dark:hover:bg-debt-900/50"
+                  :title="settleMatchTitle"
+                  data-testid="row-settle-match"
+                  @click="emit('settle-match')"
+                >
+                  <!-- On a phone the name needs every pixel: the icon gives
+                       way, and so does the amount when it is the income's
+                       own, already read just above. A long name truncates,
+                       an amount that differs never does. -->
+                  <IconCheckCircle class="h-3 w-3 shrink-0 max-sm:hidden" />
+                  <span class="truncate"
+                    >Régler {{ settleMatchShown.personName }}</span
+                  >
+                  <span
+                    class="shrink-0 whitespace-nowrap"
+                    :class="
+                      Math.abs(settleMatchShown.amount - transaction.amount) <
+                      0.01
+                        ? 'max-sm:hidden'
+                        : ''
+                    "
+                    >· {{ formatCurrency(settleMatchShown.amount) }}</span
+                  >
                 </button>
               </template>
             </div>
@@ -684,9 +772,24 @@
         >
           Assigné
         </span>
+        <!-- An income that surely repays a pending debt -->
+        <BaseButton
+          v-if="settleMatchShown && !selectionMode"
+          size="sm"
+          variant="tinted"
+          class="min-w-0 whitespace-nowrap"
+          :title="settleMatchTitle"
+          data-testid="row-settle-match"
+          @click="emit('settle-match')"
+        >
+          <IconCheckCircle class="h-3.5 w-3.5 shrink-0" />
+          <span class="truncate">Régler {{ settleMatchShown.personName }}</span>
+        </BaseButton>
         <!-- Settlement links (one per person settled by this income) -->
         <div
-          v-else-if="transaction.type === 'INCOME' && transaction.settlements"
+          v-if="
+            transaction.type === 'INCOME' && transaction.settlements?.length
+          "
           class="flex min-w-0 flex-wrap justify-end gap-1"
         >
           <TransactionSettlementLinks
@@ -717,10 +820,24 @@
         >
           <IconArrowPath />
         </BaseIconButton>
+        <!-- Settle any pending debt with this income, beside the tag icon
+             like the subscription and smoothing ones on an expense. Not
+             beside « Régler {personne} »: that button opens the same modal,
+             every pending debt listed, and needs the room. -->
+        <BaseIconButton
+          v-else-if="settleAnyShown && !settleMatchShown && !selectionMode"
+          size="sm"
+          label="Régler une dette avec ce revenu"
+          :class="REVEAL_ON_HOVER"
+          data-testid="row-settle-any"
+          @click="emit('settle-any')"
+        >
+          <IconCash />
+        </BaseIconButton>
         <!-- Keeps « Assigner » in the same place on rows that cannot be
              followed (already a subscription, income). -->
         <span
-          v-else-if="!selectionMode && !hasSettlementLinks"
+          v-else-if="!selectionMode && !hasSettlementLinks && !settleMatchShown"
           aria-hidden="true"
           class="h-8 w-8 shrink-0"
           data-testid="mark-recurring-placeholder"
@@ -741,8 +858,10 @@
         >
           <IconCalendar />
         </BaseIconButton>
+        <!-- « Régler {personne} » is wider than « Assigner »: it takes the
+             two empty slots, an income never follows nor smooths. -->
         <span
-          v-else-if="!selectionMode && !hasSettlementLinks"
+          v-else-if="!selectionMode && !hasSettlementLinks && !settleMatchShown"
           aria-hidden="true"
           class="h-8 w-8 shrink-0"
           data-testid="amortization-placeholder"

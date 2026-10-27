@@ -1404,6 +1404,195 @@ describe('TransactionsPage — optimistic updates', () => {
     })
   })
 
+  describe('settling a debt from the income', () => {
+    const debt = (
+      id: string,
+      personId: string,
+      personName: string,
+      amountRemaining: number
+    ) => ({
+      id,
+      transactionId: 'tx-1',
+      personId,
+      personName,
+      expenseCategoryId: 'cat-1',
+      expenseCategoryName: 'Alimentation',
+      amount: amountRemaining,
+      amountReceived: 0,
+      amountRemaining,
+      status: 'PENDING' as const,
+      note: null,
+      createdAt: '2026-01-15T00:00:00.000Z',
+      updatedAt: '2026-01-15T00:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
+      transaction: {
+        id: 'tx-1',
+        date: '2026-01-15',
+        description: 'Restaurant anniversaire',
+        amount: -105,
+      },
+    })
+    const thomas = debt('r-thomas', 'p-thomas', 'Thomas', 52.5)
+    const sophie = debt('r-sophie', 'p-sophie', 'Sophie', 306)
+
+    const sure = makeTx({
+      id: 'tx-sure',
+      type: 'INCOME',
+      amount: 52.5,
+      description: 'Virement Thomas resto',
+    })
+    const amountOnly = makeTx({
+      id: 'tx-amount',
+      type: 'INCOME',
+      amount: 52.5,
+      description: 'VIREMENT RECU',
+    })
+    const spent = makeTx({
+      id: 'tx-spent',
+      type: 'INCOME',
+      amount: 52.5,
+      description: 'Virement Thomas',
+      settlements: [
+        { id: 's-0', personId: 'p-j', personName: 'Julien', amountUsed: 52.5 },
+      ],
+    })
+
+    const mountWithIncomes = async (pending = [thomas, sophie]) => {
+      setupDefaultMocks([sure, amountOnly, spent])
+      vi.mocked(api.getReimbursements).mockResolvedValue([
+        ...pending,
+        // A settled debt never counts as pending.
+        { ...debt('r-done', 'p-j', 'Julien', 0), status: 'COMPLETED' as const },
+      ])
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+            SingleSettlementModal: true,
+            IncomeSettlementModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    const rowOf = (wrapper: VueWrapper, id: string) => {
+      const row = wrapper
+        .findAllComponents({ name: 'TransactionRow' })
+        .find(r => (r.props('transaction') as TransactionDto).id === id)
+      if (!row) throw new Error(`No row for ${id}`)
+      return row
+    }
+
+    it('offers « Régler {personne} » only on a sure match', async () => {
+      const wrapper = await mountWithIncomes()
+
+      expect(rowOf(wrapper, 'tx-sure').props('settleMatch')).toEqual({
+        personId: 'p-thomas',
+        personName: 'Thomas',
+        reimbursementIds: ['r-thomas'],
+        amount: 52.5,
+        description: 'Restaurant anniversaire',
+      })
+      expect(
+        rowOf(wrapper, 'tx-sure')
+          .find('[data-testid="row-settle-match"]')
+          .exists()
+      ).toBe(true)
+      expect(rowOf(wrapper, 'tx-amount').props('settleMatch')).toBeNull()
+      expect(
+        rowOf(wrapper, 'tx-amount')
+          .find('[data-testid="row-settle-match"]')
+          .exists()
+      ).toBe(false)
+      expect(rowOf(wrapper, 'tx-amount').props('settleAny')).toBe(true)
+      // No cash left: nothing at all.
+      expect(rowOf(wrapper, 'tx-spent').props('settleMatch')).toBeNull()
+      expect(rowOf(wrapper, 'tx-spent').props('settleAny')).toBe(false)
+    })
+
+    it('offers nothing on any income without a pending debt', async () => {
+      const wrapper = await mountWithIncomes([])
+
+      for (const id of ['tx-sure', 'tx-amount', 'tx-spent']) {
+        expect(rowOf(wrapper, id).props('settleMatch')).toBeNull()
+        expect(rowOf(wrapper, id).props('settleAny')).toBe(false)
+      }
+    })
+
+    it('opens the modal with the sure match ticked', async () => {
+      const wrapper = await mountWithIncomes()
+      const modal = wrapper.findComponent({ name: 'IncomeSettlementModal' })
+      expect(modal.props('isOpen')).toBe(false)
+
+      await nth(
+        rowOf(wrapper, 'tx-sure').findAll('[data-testid="row-settle-match"]'),
+        0
+      ).trigger('click')
+
+      expect(modal.props('isOpen')).toBe(true)
+      expect(modal.props('transaction')).toEqual(sure)
+      expect(modal.props('preselect')).toEqual({
+        personId: 'p-thomas',
+        reimbursementIds: ['r-thomas'],
+      })
+      expect(modal.props('pendingReimbursements')).toEqual([thomas, sophie])
+    })
+
+    it('opens it with nothing ticked from the hover icon', async () => {
+      const wrapper = await mountWithIncomes()
+
+      await rowOf(wrapper, 'tx-amount')
+        .get('[data-testid="row-settle-any"]')
+        .trigger('click')
+
+      const modal = wrapper.findComponent({ name: 'IncomeSettlementModal' })
+      expect(modal.props('isOpen')).toBe(true)
+      expect(modal.props('transaction')).toEqual(amountOnly)
+      expect(modal.props('preselect')).toBeNull()
+    })
+
+    it('says so and reloads both lists once the settlement is recorded', async () => {
+      const wrapper = await mountWithIncomes()
+      await rowOf(wrapper, 'tx-amount')
+        .get('[data-testid="row-settle-any"]')
+        .trigger('click')
+      vi.mocked(api.getReimbursements).mockClear()
+      vi.mocked(api.getTransactions).mockClear()
+
+      const modal = wrapper.findComponent({ name: 'IncomeSettlementModal' })
+      modal.vm.$emit('confirm', {
+        id: 's-1',
+        personId: 'p-thomas',
+        personName: 'Thomas',
+        incomeTransactionId: 'tx-amount',
+        incomeTransactionDescription: 'VIREMENT RECU',
+        incomeTransactionDate: '2026-01-20',
+        incomeTransactionAmount: 52.5,
+        amountUsed: 52.5,
+        note: null,
+        createdAt: '2026-01-20T00:00:00.000Z',
+        reimbursements: [],
+      })
+      await flushPromises()
+
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'Règlement de Thomas enregistré (52.50 €)'
+      )
+      expect(api.getReimbursements).toHaveBeenCalledOnce()
+      expect(api.getTransactions).toHaveBeenCalledOnce()
+      expect(modal.props('isOpen')).toBe(false)
+    })
+  })
+
   describe('stale account filter', () => {
     const makeAccountDto = (name: string) => ({
       id: `acc-${name}`,

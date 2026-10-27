@@ -219,3 +219,145 @@ export function scoreIncomeTransaction(
 
   return { score, reasons }
 }
+
+/** A pending debt line, as the income-first settlement ranks it. */
+export interface RankedDebtLine extends AllocationLine {
+  /** This very debt still owes exactly what the income has available. */
+  exactAmount: boolean
+}
+
+/** One person's pending debts, scored against an income transaction. */
+export interface RankedDebtGroup {
+  personId: string
+  personName: string
+  /** Oldest first, the cascade's order. */
+  lines: RankedDebtLine[]
+  /** Everything the person still owes. */
+  due: number
+  score: number
+  /** Amount first, as in `scoreIncomeTransaction`: the badge that discriminates. */
+  reasons: SuggestionReason[]
+}
+
+const REASON_WEIGHTS: Record<SuggestionReason, number> = { amount: 5, name: 2 }
+
+function sameAmount(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.01
+}
+
+/**
+ * `scoreIncomeTransaction` turned around: instead of ranking receipts for one
+ * person, rank every person's pending debts for one receipt. Same signals,
+ * same weights, same normalisation; still a sorting aid only — every pending
+ * debt stays in the list.
+ *
+ * - `amount` (5): one of the person's debts, or their whole pending total,
+ *   equals what the income still has available;
+ * - `name` (2): a word of the person's name (3 characters or more, accents
+ *   folded) appears in the income's description.
+ *
+ * Groups sort by score, then by name; a person's debts stay oldest first.
+ */
+export function rankDebtGroups(
+  reimbursements: ReimbursementDto[],
+  transaction: TransactionDto
+): RankedDebtGroup[] {
+  const available = availableAmountOf(transaction)
+  const description = normalize(transaction.description)
+  const byPerson = new Map<string, RankedDebtGroup>()
+
+  for (const reimbursement of reimbursements) {
+    if (reimbursement.amountRemaining <= 0) continue
+    let group = byPerson.get(reimbursement.personId)
+    if (!group) {
+      group = {
+        personId: reimbursement.personId,
+        personName: reimbursement.personName,
+        lines: [],
+        due: 0,
+        score: 0,
+        reasons: [],
+      }
+      byPerson.set(reimbursement.personId, group)
+    }
+    const line = toAllocationLine(reimbursement)
+    group.lines.push({
+      ...line,
+      exactAmount: available > 0 && sameAmount(line.amountDue, available),
+    })
+    group.due = round2(group.due + line.amountDue)
+  }
+
+  const groups = [...byPerson.values()]
+  for (const group of groups) {
+    group.lines.sort(byOldestFirst)
+
+    const reasons: SuggestionReason[] = []
+    if (
+      available > 0 &&
+      (group.lines.some(line => line.exactAmount) ||
+        sameAmount(group.due, available))
+    ) {
+      reasons.push('amount')
+    }
+    const nameTokens = normalize(group.personName)
+      .split(/\s+/)
+      .filter(token => token.length >= 3)
+    if (nameTokens.some(token => description.includes(token))) {
+      reasons.push('name')
+    }
+    group.reasons = reasons
+    group.score = reasons.reduce(
+      (sum, reason) => sum + REASON_WEIGHTS[reason],
+      0
+    )
+  }
+
+  return groups.sort(
+    (a, b) => b.score - a.score || a.personName.localeCompare(b.personName)
+  )
+}
+
+/** The one debt (or set of debts) an income almost certainly settles. */
+export interface SureMatch {
+  personId: string
+  personName: string
+  /** What to tick when the settlement modal opens. */
+  reimbursementIds: string[]
+  /** What those debts still owe together. */
+  amount: number
+  /** The expense(s) being repaid, as the row's tooltip names them. */
+  description: string
+}
+
+/**
+ * A match sure enough to put a « Régler {personne} » button on the income's
+ * row: exactly one person both owes the available amount (on one debt, or in
+ * total) and is named in the description. Two such people, or one signal
+ * alone, is a guess — the row then only offers the generic icon.
+ *
+ * The debt with the exact amount is preferred (the oldest, if several); the
+ * whole of the person's debts otherwise, since it is then their total that
+ * matched.
+ */
+export function sureMatch(
+  reimbursements: ReimbursementDto[],
+  transaction: TransactionDto
+): SureMatch | null {
+  const candidates = rankDebtGroups(reimbursements, transaction).filter(
+    group => group.reasons.includes('amount') && group.reasons.includes('name')
+  )
+  const [group] = candidates
+  if (!group || candidates.length !== 1) return null
+
+  const exact = group.lines.find(line => line.exactAmount)
+  const lines = exact ? [exact] : group.lines
+
+  return {
+    personId: group.personId,
+    personName: group.personName,
+    reimbursementIds: lines.map(line => line.reimbursementId),
+    amount: round2(lines.reduce((sum, line) => sum + line.amountDue, 0)),
+    description: lines.map(line => line.description).join(', '),
+  }
+}

@@ -4,7 +4,9 @@ import {
   cascadeAllocate,
   personSearchTerms,
   prorataAllocate,
+  rankDebtGroups,
   scoreIncomeTransaction,
+  sureMatch,
   toAllocationLine,
   type AllocationLine,
 } from './settlements'
@@ -374,5 +376,282 @@ describe('personSearchTerms', () => {
 
   it('returns nothing for a person with no usable name', () => {
     expect(personSearchTerms('')).toEqual([])
+  })
+})
+
+const debt = (
+  overrides: Partial<ReimbursementDto> & {
+    date?: string
+    description?: string
+  } = {}
+): ReimbursementDto => {
+  const { date = '2026-08-05', description = 'Restaurant', ...rest } = overrides
+  const id = rest.id ?? 'r-1'
+  return {
+    id,
+    transactionId: `tx-${id}`,
+    personId: 'p-thomas',
+    personName: 'Thomas',
+    expenseCategoryId: 'cat-resto',
+    expenseCategoryName: 'Restaurants',
+    amount: 52.5,
+    amountReceived: 0,
+    amountRemaining: 52.5,
+    status: 'PENDING',
+    note: null,
+    createdAt: `${date}T10:00:00.000Z`,
+    updatedAt: `${date}T10:00:00.000Z`,
+    settlementIds: [],
+    incomeTransactionIds: [],
+    transaction: { id: `tx-${id}`, date, description, amount: -105 },
+    ...rest,
+  }
+}
+
+const thomasResto = debt({
+  id: 'r-thomas',
+  description: 'Restaurant anniversaire',
+})
+const sophieHotel = debt({
+  id: 'r-sophie',
+  personId: 'p-sophie',
+  personName: 'Sophie Dubois',
+  amount: 306,
+  amountRemaining: 306,
+  description: 'Hôtel Firenze',
+  date: '2025-11-10',
+})
+
+describe('rankDebtGroups', () => {
+  it('returns nothing when no debt is pending', () => {
+    expect(rankDebtGroups([], income())).toEqual([])
+    expect(
+      rankDebtGroups(
+        [debt({ amountRemaining: 0, status: 'COMPLETED' })],
+        income()
+      )
+    ).toEqual([])
+  })
+
+  it('puts the person owing the available amount first, with the reason on the line', () => {
+    const groups = rankDebtGroups(
+      [sophieHotel, thomasResto],
+      income({ description: 'VIREMENT RECU', amount: 52.5 })
+    )
+
+    expect(groups.map(g => g.personId)).toEqual(['p-thomas', 'p-sophie'])
+    expect(groups[0]?.reasons).toEqual(['amount'])
+    expect(groups[0]?.score).toBe(5)
+    expect(groups[0]?.lines[0]?.exactAmount).toBe(true)
+    expect(groups[1]?.reasons).toEqual([])
+    expect(groups[1]?.lines[0]?.exactAmount).toBe(false)
+  })
+
+  it('matches the amount on the pending total when no single debt does', () => {
+    const groups = rankDebtGroups(
+      [
+        debt({ id: 'r-a', amountRemaining: 20, date: '2026-08-12' }),
+        debt({ id: 'r-b', amountRemaining: 32.5, date: '2026-08-01' }),
+        sophieHotel,
+      ],
+      income({ description: 'VIREMENT RECU', amount: 52.5 })
+    )
+
+    expect(groups[0]?.personId).toBe('p-thomas')
+    expect(groups[0]?.reasons).toEqual(['amount'])
+    expect(groups[0]?.due).toBe(52.5)
+    // No line matches on its own, and they stay oldest first.
+    expect(
+      groups[0]?.lines.map(l => [l.reimbursementId, l.exactAmount])
+    ).toEqual([
+      ['r-b', false],
+      ['r-a', false],
+    ])
+  })
+
+  it('scores the name alone, accent-folded, below an amount', () => {
+    const groups = rankDebtGroups(
+      [thomasResto, sophieHotel],
+      income({ description: 'VIR SOPHIE DUBOIS', amount: 40 })
+    )
+
+    expect(groups[0]?.personId).toBe('p-sophie')
+    expect(groups[0]?.reasons).toEqual(['name'])
+    expect(groups[0]?.score).toBe(2)
+  })
+
+  it('stacks both reasons, amount listed first', () => {
+    const groups = rankDebtGroups(
+      [sophieHotel, thomasResto],
+      income({ description: 'Virement Thomas resto', amount: 52.5 })
+    )
+
+    expect(groups[0]?.personId).toBe('p-thomas')
+    expect(groups[0]?.reasons).toEqual(['amount', 'name'])
+    expect(groups[0]?.score).toBe(7)
+  })
+
+  it('reads what a partial debt still owes, not its original amount', () => {
+    const partial = debt({
+      id: 'r-partial',
+      amount: 100,
+      amountReceived: 47.5,
+      amountRemaining: 52.5,
+      status: 'PARTIAL',
+    })
+    const groups = rankDebtGroups(
+      [partial],
+      income({ description: 'VIREMENT', amount: 52.5 })
+    )
+
+    expect(groups[0]?.reasons).toEqual(['amount'])
+    expect(groups[0]?.lines[0]?.amountDue).toBe(52.5)
+  })
+
+  it('compares against what the income still has available', () => {
+    const groups = rankDebtGroups(
+      [thomasResto],
+      income({
+        description: 'VIREMENT',
+        amount: 100,
+        settlements: [
+          { id: 's-1', personId: 'p-x', personName: 'X', amountUsed: 47.5 },
+        ],
+      })
+    )
+
+    expect(groups[0]?.reasons).toEqual(['amount'])
+  })
+
+  it('breaks a tie on the name', () => {
+    const groups = rankDebtGroups(
+      [
+        debt({ id: 'r-z', personId: 'p-zoe', personName: 'Zoé' }),
+        debt({ id: 'r-a', personId: 'p-anna', personName: 'Anna' }),
+      ],
+      income({ description: 'VIREMENT', amount: 10 })
+    )
+
+    expect(groups.map(g => g.personName)).toEqual(['Anna', 'Zoé'])
+  })
+})
+
+describe('sureMatch', () => {
+  it('finds the debt when one person owes the amount and is named', () => {
+    expect(
+      sureMatch(
+        [sophieHotel, thomasResto],
+        income({ description: 'Virement Thomas resto', amount: 52.5 })
+      )
+    ).toEqual({
+      personId: 'p-thomas',
+      personName: 'Thomas',
+      reimbursementIds: ['r-thomas'],
+      amount: 52.5,
+      description: 'Restaurant anniversaire',
+    })
+  })
+
+  it('stays silent on the amount alone', () => {
+    expect(
+      sureMatch(
+        [thomasResto],
+        income({ description: 'VIREMENT', amount: 52.5 })
+      )
+    ).toBeNull()
+  })
+
+  it('stays silent on the name alone', () => {
+    expect(
+      sureMatch(
+        [thomasResto],
+        income({ description: 'VIR THOMAS', amount: 20 })
+      )
+    ).toBeNull()
+  })
+
+  it('stays silent when two people tie on both reasons', () => {
+    const tomas = debt({
+      id: 'r-other',
+      personId: 'p-other',
+      personName: 'Thomas Bis',
+    })
+    expect(
+      sureMatch(
+        [thomasResto, tomas],
+        income({ description: 'VIR THOMAS', amount: 52.5 })
+      )
+    ).toBeNull()
+  })
+
+  it('ticks every debt of the person when their total is what matched', () => {
+    const match = sureMatch(
+      [
+        debt({
+          id: 'r-a',
+          amountRemaining: 20,
+          description: 'Ciné',
+          date: '2026-08-01',
+        }),
+        debt({
+          id: 'r-b',
+          amountRemaining: 32.5,
+          description: 'Resto',
+          date: '2026-08-02',
+        }),
+      ],
+      income({ description: 'VIR THOMAS', amount: 52.5 })
+    )
+
+    expect(match).toEqual({
+      personId: 'p-thomas',
+      personName: 'Thomas',
+      reimbursementIds: ['r-a', 'r-b'],
+      amount: 52.5,
+      description: 'Ciné, Resto',
+    })
+  })
+
+  it('ticks only the exact debt when the person owes other things too', () => {
+    const match = sureMatch(
+      [
+        thomasResto,
+        debt({ id: 'r-other', amountRemaining: 12, date: '2026-07-01' }),
+      ],
+      income({ description: 'VIR THOMAS', amount: 52.5 })
+    )
+
+    expect(match?.reimbursementIds).toEqual(['r-thomas'])
+    expect(match?.amount).toBe(52.5)
+  })
+
+  it('matches a partial debt on what it still owes, against an income already drawn on', () => {
+    const match = sureMatch(
+      [
+        debt({
+          id: 'r-partial',
+          amount: 100,
+          amountReceived: 70,
+          amountRemaining: 30,
+          status: 'PARTIAL',
+        }),
+      ],
+      income({
+        description: 'VIR THOMAS',
+        amount: 80,
+        settlements: [
+          { id: 's-1', personId: 'p-x', personName: 'X', amountUsed: 50 },
+        ],
+      })
+    )
+
+    expect(match?.reimbursementIds).toEqual(['r-partial'])
+    expect(match?.amount).toBe(30)
+  })
+
+  it('stays silent without any pending debt', () => {
+    expect(
+      sureMatch([], income({ description: 'VIR THOMAS', amount: 52.5 }))
+    ).toBeNull()
   })
 })
