@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import type { ReimbursementDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
@@ -21,7 +22,11 @@
     { dense: false, remainingAmount: 0 }
   )
 
-  const emit = defineEmits<{ delete: [id: string] }>()
+  const emit = defineEmits<{
+    delete: [id: string]
+    /** « Régler » on one open debt: the page opens the single settlement. */
+    settle: [reimbursement: ReimbursementDto]
+  }>()
 
   const remaining = () => props.remainingAmount ?? 0
 </script>
@@ -88,16 +93,34 @@
           :data-testid="`reimbursement-income-link-${reimb.id}`"
         />
       </div>
-      <BaseIconButton
+      <!-- An open debt can be settled or removed; « Régler » comes first. -->
+      <div
         v-if="reimb.status !== 'COMPLETED'"
-        size="sm"
-        variant="danger"
-        class="-my-1"
-        :label="`Supprimer le remboursement de ${reimb.personName}`"
-        @click.stop="emit('delete', reimb.id)"
+        class="flex shrink-0 items-center gap-1.5"
       >
-        <IconClose />
-      </BaseIconButton>
+        <BaseButton
+          variant="tinted"
+          size="sm"
+          class="shrink-0"
+          :class="
+            dense ? 'pointer-coarse:min-h-[44px] pointer-coarse:px-4' : '-my-1'
+          "
+          :title="`Régler uniquement ${reimb.transaction?.description || 'cette transaction'}`"
+          :data-testid="`reimbursement-settle-${reimb.id}`"
+          @click.stop="emit('settle', reimb)"
+        >
+          Régler
+        </BaseButton>
+        <BaseIconButton
+          size="sm"
+          variant="danger"
+          class="-my-1"
+          :label="`Supprimer le remboursement de ${reimb.personName}`"
+          @click.stop="emit('delete', reimb.id)"
+        >
+          <IconClose />
+        </BaseIconButton>
+      </div>
     </div>
     <div
       v-if="!dense && remaining() > 0"

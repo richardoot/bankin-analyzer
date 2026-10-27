@@ -7,21 +7,27 @@
    * category had to be chosen up front. The deduction now attaches to the
    * expense transaction itself, which already knows its category — the field
    * decided nothing and only asked the user to guess.
+   *
+   * The person list comes from the store, so a missing person can be created
+   * in place (« + Nouvelle personne ») without leaving the modal; the amount
+   * and note already typed stay as they are.
    */
   import { computed, ref, watch } from 'vue'
   import BaseModal from '@/components/ui/BaseModal.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseField from '@/components/ui/BaseField.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
   import { api } from '@/lib/api'
-  import type { TransactionDto, PersonDto } from '@/lib/api'
+  import type { TransactionDto } from '@/lib/api'
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
+  import { usePersonsStore } from '@/stores/persons'
 
   const props = defineProps<{
     isOpen: boolean
     transaction: TransactionDto | null
-    persons: PersonDto[]
     remainingAmount: number
   }>()
 
@@ -33,6 +39,7 @@
   }>()
 
   const toast = useToast()
+  const personsStore = usePersonsStore()
 
   const form = ref<{ personId: string; amount: number | null; note: string }>({
     personId: '',
@@ -42,6 +49,44 @@
   const isCreating = ref(false)
   const customDivisor = ref<number | null>(2)
 
+  // « + Nouvelle personne »: a folded block under the person select.
+  const isAddingPerson = ref(false)
+  const newPerson = ref<{ name: string; email: string }>({
+    name: '',
+    email: '',
+  })
+  const isCreatingPerson = ref(false)
+  /** The store's refusal, kept inside the block rather than only a toast. */
+  const newPersonError = ref<string | null>(null)
+
+  function closeNewPerson(): void {
+    isAddingPerson.value = false
+    newPerson.value = { name: '', email: '' }
+    newPersonError.value = null
+  }
+
+  async function createPerson(): Promise<void> {
+    const name = newPerson.value.name.trim()
+    if (!name || isCreatingPerson.value) return
+    isCreatingPerson.value = true
+    newPersonError.value = null
+    try {
+      const created = await personsStore.addPerson(
+        name,
+        newPerson.value.email.trim() || undefined
+      )
+      if (created) {
+        form.value.personId = created.id
+        closeNewPerson()
+      } else {
+        newPersonError.value =
+          personsStore.error ?? 'Impossible de créer la personne'
+      }
+    } finally {
+      isCreatingPerson.value = false
+    }
+  }
+
   function resetForm(): void {
     form.value = {
       personId: '',
@@ -49,6 +94,7 @@
       note: '',
     }
     customDivisor.value = 2
+    closeNewPerson()
   }
 
   function setAmountFromDivisor(divisor: number): void {
@@ -79,7 +125,8 @@
       form.value.personId !== '' &&
       amount.value > 0 &&
       amountError.value === undefined &&
-      !isCreating.value
+      !isCreating.value &&
+      !isCreatingPerson.value
   )
 
   async function handleSubmit(): Promise<void> {
@@ -117,7 +164,10 @@
   watch(
     () => props.isOpen,
     isOpen => {
-      if (isOpen) resetForm()
+      if (!isOpen) return
+      resetForm()
+      // The page loads the list on mount; this covers a modal opened first.
+      if (personsStore.persons.length === 0) void personsStore.fetchPersons()
     }
   )
 
@@ -167,17 +217,87 @@
 
       <!-- Form -->
       <div class="space-y-4">
-        <BaseField
-          v-model="form.personId"
-          as="select"
-          label="Personne *"
-          data-testid="reimbursement-person"
-        >
-          <option value="">Sélectionnez une personne</option>
-          <option v-for="person in persons" :key="person.id" :value="person.id">
-            {{ person.name }}
-          </option>
-        </BaseField>
+        <div>
+          <BaseField
+            v-model="form.personId"
+            as="select"
+            label="Personne *"
+            data-testid="reimbursement-person"
+          >
+            <option value="">Sélectionnez une personne</option>
+            <option
+              v-for="person in personsStore.persons"
+              :key="person.id"
+              :value="person.id"
+            >
+              {{ person.name }}
+            </option>
+          </BaseField>
+
+          <button
+            v-if="!isAddingPerson"
+            type="button"
+            data-testid="reimbursement-new-person"
+            class="mt-1 inline-flex min-h-[40px] items-center text-sm text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+            @click="isAddingPerson = true"
+          >
+            + Nouvelle personne
+          </button>
+
+          <div
+            v-else
+            data-testid="reimbursement-new-person-block"
+            class="mt-2 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-600 dark:bg-slate-800"
+          >
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Nouvelle personne
+            </p>
+            <InlineAlert v-if="newPersonError">{{
+              newPersonError
+            }}</InlineAlert>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BaseField
+                v-model="newPerson.name"
+                type="text"
+                size="sm"
+                label="Nom *"
+                placeholder="Nom"
+                data-testid="reimbursement-new-person-name"
+                @keyup.enter="createPerson"
+              />
+              <BaseField
+                v-model="newPerson.email"
+                type="email"
+                size="sm"
+                label="Email (optionnel)"
+                placeholder="Email (optionnel)"
+                data-testid="reimbursement-new-person-email"
+                @keyup.enter="createPerson"
+              />
+            </div>
+            <div class="flex justify-end gap-2">
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                :disabled="isCreatingPerson"
+                @click="closeNewPerson"
+              >
+                Annuler
+              </BaseButton>
+              <BaseButton
+                variant="tinted"
+                size="sm"
+                :disabled="!newPerson.name.trim()"
+                :loading="isCreatingPerson"
+                data-testid="reimbursement-new-person-create"
+                @click="createPerson"
+              >
+                <IconPlus class="h-3.5 w-3.5" />
+                Créer et choisir
+              </BaseButton>
+            </div>
+          </div>
+        </div>
 
         <div>
           <BaseField

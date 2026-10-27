@@ -4,6 +4,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { nextTick } from 'vue'
 import TransactionRow from './TransactionRow.vue'
 import type { ReimbursementDto, TransactionDto } from '@/lib/api'
+import { nth } from '@/test/nth'
 
 // The links to the Transactions page need a router behind RouterLink.
 const router = createRouter({
@@ -236,6 +237,24 @@ describe('TransactionRow', () => {
       ],
     })
     expect(wrapper.text()).toContain('Remboursé')
+  })
+
+  it('relays « Régler » from the table list and the expanded card list', async () => {
+    const debt = reimb({ id: 'r-open', amountRemaining: 10 })
+    const wrapper = mountRow({ reimbursements: [debt] })
+
+    // The table list (lg and up) is always rendered.
+    const table = wrapper.findAll('[data-testid="reimbursement-settle-r-open"]')
+    expect(table).toHaveLength(1)
+    await nth(table, 0).trigger('click')
+    expect(wrapper.emitted('settle')).toEqual([[debt]])
+
+    // The card (< lg) shows its list once expanded.
+    await wrapper.setProps({ reimbursementsExpanded: true })
+    const both = wrapper.findAll('[data-testid="reimbursement-settle-r-open"]')
+    expect(both).toHaveLength(2)
+    await nth(both, 0).trigger('click')
+    expect(wrapper.emitted('settle')).toEqual([[debt], [debt]])
   })
 
   it('shows the selection checkbox instead of the category icon in selection mode', async () => {

@@ -88,6 +88,8 @@
     'toggle-reimbursements': []
     'open-settlement': [settlement: TransactionSettlementSummaryDto]
     'delete-reimbursement': [id: string]
+    /** « Régler » on one open debt of the expense. */
+    settle: [reimbursement: ReimbursementDto]
     'attach-tag': [id: string]
     'detach-tag': [id: string]
     'create-tag': [name: string]
@@ -548,6 +550,7 @@
           :reimbursements="reimbursements"
           dense
           @delete="id => emit('delete-reimbursement', id)"
+          @settle="r => emit('settle', r)"
         />
       </div>
     </div>
@@ -844,6 +847,7 @@
         :reimbursements="reimbursements"
         :remaining-amount="remainingAmount"
         @delete="id => emit('delete-reimbursement', id)"
+        @settle="r => emit('settle', r)"
       />
     </div>
   </div>

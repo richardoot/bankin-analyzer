@@ -60,7 +60,7 @@ describe('usePersonsStore', () => {
     expect(store.error).toBe('Network error')
   })
 
-  it('addPerson() adds to list and sorts by name', async () => {
+  it('addPerson() returns the created person, added and sorted by name', async () => {
     const store = usePersonsStore()
     store.persons = [
       { id: '1', name: 'Charlie', email: null, createdAt: '', updatedAt: '' },
@@ -77,19 +77,20 @@ describe('usePersonsStore', () => {
 
     const result = await store.addPerson('Alice')
 
-    expect(result).toBe(true)
+    expect(result).toEqual(newPerson)
     expect(store.persons).toHaveLength(2)
     expect(store.persons[0]?.name).toBe('Alice')
     expect(store.persons[1]?.name).toBe('Charlie')
   })
 
-  it('addPerson() returns false on failure', async () => {
+  it('addPerson() returns null on failure and keeps the error', async () => {
     mockedApi.createPerson.mockRejectedValue(new Error('fail'))
 
     const store = usePersonsStore()
     const result = await store.addPerson('Test')
 
-    expect(result).toBe(false)
+    expect(result).toBeNull()
+    expect(store.error).toBe('fail')
   })
 
   it('updatePerson() updates in list', async () => {

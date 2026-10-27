@@ -1310,6 +1310,100 @@ describe('TransactionsPage — optimistic updates', () => {
     })
   })
 
+  describe('settling a debt from the expense', () => {
+    const debt = {
+      id: 'r-1',
+      transactionId: 'tx-1',
+      personId: 'p-1',
+      personName: 'Thomas',
+      expenseCategoryId: 'cat-1',
+      expenseCategoryName: 'Alimentation',
+      amount: 2,
+      amountReceived: 0,
+      amountRemaining: 2,
+      status: 'PENDING' as const,
+      note: null,
+      createdAt: '2026-01-15T00:00:00.000Z',
+      updatedAt: '2026-01-15T00:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
+      transaction: {
+        id: 'tx-1',
+        date: '2026-01-15',
+        description: 'Cafe',
+        amount: -3.5,
+      },
+    }
+
+    const mountWithDebt = async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getReimbursements).mockResolvedValue([debt])
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+            SingleSettlementModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('opens the single settlement with the debt from the ledger', async () => {
+      const wrapper = await mountWithDebt()
+      const modal = wrapper.findComponent({ name: 'SingleSettlementModal' })
+      expect(modal.props('isOpen')).toBe(false)
+
+      await nth(
+        wrapper.findAll('[data-testid="reimbursement-settle-r-1"]'),
+        0
+      ).trigger('click')
+
+      expect(modal.props('isOpen')).toBe(true)
+      expect(modal.props('reimbursement')).toEqual(debt)
+    })
+
+    it('says so and reloads both lists once the settlement is recorded', async () => {
+      const wrapper = await mountWithDebt()
+      await nth(
+        wrapper.findAll('[data-testid="reimbursement-settle-r-1"]'),
+        0
+      ).trigger('click')
+      vi.mocked(api.getReimbursements).mockClear()
+      vi.mocked(api.getTransactions).mockClear()
+
+      const modal = wrapper.findComponent({ name: 'SingleSettlementModal' })
+      modal.vm.$emit('confirm', {
+        id: 's-1',
+        personId: 'p-1',
+        personName: 'Thomas',
+        incomeTransactionId: 'tx-in',
+        incomeTransactionDescription: 'VIR Thomas',
+        incomeTransactionDate: '2026-01-20',
+        incomeTransactionAmount: 2,
+        amountUsed: 2,
+        note: null,
+        createdAt: '2026-01-20T00:00:00.000Z',
+        reimbursements: [],
+      })
+      await flushPromises()
+
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'Règlement de Thomas enregistré (2.00 €)'
+      )
+      expect(api.getReimbursements).toHaveBeenCalledOnce()
+      expect(api.getTransactions).toHaveBeenCalledOnce()
+      expect(modal.props('isOpen')).toBe(false)
+    })
+  })
+
   describe('stale account filter', () => {
     const makeAccountDto = (name: string) => ({
       id: `acc-${name}`,

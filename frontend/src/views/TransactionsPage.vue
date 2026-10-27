@@ -25,6 +25,7 @@
   import TransactionAmortizationModal from '@/components/transactions/TransactionAmortizationModal.vue'
   import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
+  import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
@@ -1594,6 +1595,34 @@
     selectedTransaction.value = null
   }
 
+  // Settle one open debt from the expense's list: the same single-line modal
+  // as the Remboursements page. The debt comes from `reimbursements`, loaded
+  // with its expense (`includeTransaction=true`), which the modal reads.
+  // The debt stays set after closing so the modal keeps its content while it
+  // fades out, as on the Remboursements page.
+  const settlingReimbursement = ref<ReimbursementDto | null>(null)
+  const showSettlementModal = ref(false)
+
+  function openSettlement(reimbursement: ReimbursementDto) {
+    settlingReimbursement.value =
+      reimbursements.value.find(r => r.id === reimbursement.id) ?? reimbursement
+    showSettlementModal.value = true
+  }
+
+  function closeSettlement() {
+    showSettlementModal.value = false
+  }
+
+  // No optimistic update: the debt's status and the income's links are tied,
+  // and the server is the source for both.
+  async function handleSettlementCreated(settlement: SettlementDto) {
+    showSettlementModal.value = false
+    toast.success(
+      `Règlement de ${settlement.personName} enregistré (${formatCurrency(settlement.amountUsed)})`
+    )
+    await Promise.all([fetchReimbursements(), fetchTransactions()])
+  }
+
   // Delete reimbursement — asked first: one click on a 26 px cross used to
   // drop the debt for good.
   const reimbursementToDelete = ref<ReimbursementDto | null>(null)
@@ -2486,6 +2515,7 @@
               @toggle-reimbursements="toggleReimbursementsExpand(tx.id)"
               @open-settlement="openSettlementDetail"
               @delete-reimbursement="handleDeleteReimbursement"
+              @settle="openSettlement"
               @attach-tag="id => handleAttachTag(tx, id)"
               @detach-tag="id => handleDetachTag(tx, id)"
               @create-tag="name => handleCreateTag(tx, name)"
@@ -2635,7 +2665,6 @@
       ref="reimbursementModalRef"
       :is-open="showReimbursementModal"
       :transaction="selectedTransaction"
-      :persons="personsStore.persons"
       :remaining-amount="
         selectedTransaction ? getRemainingAmount(selectedTransaction) : 0
       "
@@ -2674,6 +2703,13 @@
     <!-- Reimbursement category confirmation after a transaction category change -->
 
     <!-- Settlement detail (read-only) for income transactions -->
+    <SingleSettlementModal
+      :is-open="showSettlementModal"
+      :reimbursement="settlingReimbursement"
+      @close="closeSettlement"
+      @confirm="handleSettlementCreated"
+    />
+
     <SettlementDetailModal
       :is-open="showSettlementDetailModal"
       :settlement="selectedSettlement"
