@@ -14,17 +14,20 @@ export const usePersonsStore = defineStore('persons', () => {
     }, 'Impossible de charger les personnes')
   }
 
-  async function addPerson(name: string, email?: string): Promise<boolean> {
-    const result = await run(async () => {
+  /** The created person, so a caller can select it; null on failure (see `error`). */
+  async function addPerson(
+    name: string,
+    email?: string
+  ): Promise<PersonDto | null> {
+    return run(async () => {
       const newPerson = await api.createPerson({
         name,
         ...(email && { email }),
       })
       persons.value.push(newPerson)
       persons.value.sort((a, b) => a.name.localeCompare(b.name))
-      return true
+      return newPerson
     }, 'Impossible de créer la personne')
-    return result ?? false
   }
 
   async function updatePerson(

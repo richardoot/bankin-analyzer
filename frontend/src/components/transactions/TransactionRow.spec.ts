@@ -4,6 +4,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { nextTick } from 'vue'
 import TransactionRow from './TransactionRow.vue'
 import type { ReimbursementDto, TransactionDto } from '@/lib/api'
+import { nth } from '@/test/nth'
 
 // The links to the Transactions page need a router behind RouterLink.
 const router = createRouter({
@@ -236,6 +237,24 @@ describe('TransactionRow', () => {
       ],
     })
     expect(wrapper.text()).toContain('Remboursé')
+  })
+
+  it('relays « Régler » from the table list and the expanded card list', async () => {
+    const debt = reimb({ id: 'r-open', amountRemaining: 10 })
+    const wrapper = mountRow({ reimbursements: [debt] })
+
+    // The table list (lg and up) is always rendered.
+    const table = wrapper.findAll('[data-testid="reimbursement-settle-r-open"]')
+    expect(table).toHaveLength(1)
+    await nth(table, 0).trigger('click')
+    expect(wrapper.emitted('settle')).toEqual([[debt]])
+
+    // The card (< lg) shows its list once expanded.
+    await wrapper.setProps({ reimbursementsExpanded: true })
+    const both = wrapper.findAll('[data-testid="reimbursement-settle-r-open"]')
+    expect(both).toHaveLength(2)
+    await nth(both, 0).trigger('click')
+    expect(wrapper.emitted('settle')).toEqual([[debt], [debt]])
   })
 
   it('shows the selection checkbox instead of the category icon in selection mode', async () => {
@@ -472,6 +491,189 @@ describe('TransactionRow', () => {
       expect(
         wrapper.find('[data-testid="amortization-placeholder"]').exists()
       ).toBe(true)
+    })
+  })
+
+  describe('settling from an income', () => {
+    const match = {
+      personId: 'p-thomas',
+      personName: 'Thomas',
+      amount: 52.5,
+      description: 'Restaurant anniversaire',
+    }
+    const income = (overrides: Partial<TransactionDto> = {}) =>
+      tx({
+        type: 'INCOME',
+        amount: 52.5,
+        description: 'Virement Thomas resto',
+        ...overrides,
+      })
+    const openMenu = async (wrapper: ReturnType<typeof mountRow>) => {
+      await wrapper
+        .get('[data-testid="row-menu"] button[aria-haspopup="menu"]')
+        .trigger('click')
+      await nextTick()
+      return wrapper.findAll('[role="menuitem"]').map(i => i.text())
+    }
+
+    it('puts « Régler {personne} » in the main slot of the table, saying why', async () => {
+      const wrapper = mountRow({
+        transaction: income(),
+        settleMatch: match,
+        settleAny: true,
+      })
+
+      const button = wrapper
+        .get('[data-testid="row-grid"]')
+        .get('[data-testid="row-settle-match"]')
+      expect(button.text()).toBe('Régler Thomas')
+      expect(button.attributes('title')).toMatch(
+        /^Ce revenu correspond au remboursement de Thomas \(Restaurant anniversaire, 52,50\s€\)$/
+      )
+      // The button takes the empty slots; the generic icon would open the
+      // same modal and steal its room.
+      expect(wrapper.find('[data-testid="row-settle-any"]').exists()).toBe(
+        false
+      )
+      expect(
+        wrapper.find('[data-testid="mark-recurring-placeholder"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="amortization-placeholder"]').exists()
+      ).toBe(false)
+      await button.trigger('click')
+      expect(wrapper.emitted('settle-match')).toHaveLength(1)
+    })
+
+    it("puts an amber pill in the card's metadata line", async () => {
+      const wrapper = mountRow({
+        transaction: income(),
+        settleMatch: match,
+        settleAny: true,
+      })
+
+      const pill = wrapper
+        .get('[data-testid="row-card"]')
+        .get('[data-testid="row-settle-match"]')
+      expect(pill.text()).toMatch(/^Régler Thomas\s?· 52,50\s€$/)
+      // The pill takes the category's room, as on the mock-up; the
+      // category stays on the icon.
+      expect(wrapper.get('[data-testid="row-card"]').text()).not.toContain(
+        'Alimentation'
+      )
+      expect(pill.classes()).toContain('bg-debt-100')
+      expect(pill.classes()).toContain('text-debt-700')
+      // The 44px halo of the other pills.
+      expect(pill.classes()).toContain('pointer-coarse:before:-inset-y-2.5')
+      await pill.trigger('click')
+      expect(wrapper.emitted('settle-match')).toHaveLength(1)
+      // The pill is a control: the card does not open the filing dialog.
+      expect(wrapper.emitted('open-category')).toBeUndefined()
+    })
+
+    it('reveals « Régler une dette avec ce revenu » beside the tag icon on hover', async () => {
+      const wrapper = mountRow({ transaction: income(), settleAny: true })
+
+      expect(wrapper.find('[data-testid="row-settle-match"]').exists()).toBe(
+        false
+      )
+      const icon = wrapper.get('[data-testid="row-settle-any"]')
+      expect(icon.attributes('aria-label')).toBe(
+        'Régler une dette avec ce revenu'
+      )
+      expect(icon.classes()).toContain('group-hover:opacity-100')
+      expect(icon.classes()).toContain('group-focus-within:opacity-100')
+      await icon.trigger('click')
+      expect(wrapper.emitted('settle-any')).toHaveLength(1)
+    })
+
+    it('offers it in the « … » menu instead of « Ajouter un remboursement »', async () => {
+      const wrapper = mountRow(
+        { transaction: income(), settleAny: true },
+        { attachTo: document.body }
+      )
+
+      expect(await openMenu(wrapper)).toEqual([
+        'Modifier la catégorie',
+        'Ajouter une note',
+        'Régler une dette avec ce revenu…',
+        'Ajouter une étiquette',
+      ])
+      await wrapper.get('[data-testid="row-menu-settle"]').trigger('click')
+      expect(wrapper.emitted('settle-any')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('keeps the settlement links alongside, while cash remains', () => {
+      const wrapper = mountRow({
+        transaction: income({
+          amount: 100,
+          settlements: [
+            {
+              id: 's-1',
+              personId: 'p-j',
+              personName: 'Julien',
+              amountUsed: 40,
+            },
+          ],
+        }),
+        settleAny: true,
+      })
+
+      expect(wrapper.text()).toContain('Julien')
+      expect(wrapper.find('[data-testid="row-settle-any"]').exists()).toBe(true)
+    })
+
+    it('offers nothing on an income with no cash left', async () => {
+      const wrapper = mountRow({
+        transaction: income({
+          settlements: [
+            {
+              id: 's-1',
+              personId: 'p-j',
+              personName: 'Julien',
+              amountUsed: 52.5,
+            },
+          ],
+        }),
+        settleMatch: match,
+        settleAny: true,
+      })
+
+      expect(wrapper.find('[data-testid="row-settle-match"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="row-settle-any"]').exists()).toBe(
+        false
+      )
+      expect(await openMenu(wrapper)).not.toContain(
+        'Régler une dette avec ce revenu…'
+      )
+    })
+
+    it('offers nothing on an expense', async () => {
+      const wrapper = mountRow({ settleMatch: match, settleAny: true })
+
+      expect(wrapper.find('[data-testid="row-settle-match"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="row-settle-any"]').exists()).toBe(
+        false
+      )
+      expect(await openMenu(wrapper)).not.toContain(
+        'Régler une dette avec ce revenu…'
+      )
+    })
+
+    it('offers nothing when the page has no pending debt to offer', () => {
+      const wrapper = mountRow({ transaction: income() })
+
+      expect(wrapper.find('[data-testid="row-settle-match"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="row-settle-any"]').exists()).toBe(
+        false
+      )
     })
   })
 

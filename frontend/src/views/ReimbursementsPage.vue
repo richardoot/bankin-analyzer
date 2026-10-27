@@ -360,12 +360,12 @@
     if (!newPersonName.value.trim()) return
 
     isAddingPerson.value = true
-    const success = await personsStore.addPerson(
+    const created = await personsStore.addPerson(
       newPersonName.value.trim(),
       newPersonEmail.value.trim() || undefined
     )
 
-    if (success) {
+    if (created) {
       newPersonName.value = ''
       newPersonEmail.value = ''
     }

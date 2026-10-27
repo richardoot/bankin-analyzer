@@ -25,6 +25,9 @@
   import TransactionAmortizationModal from '@/components/transactions/TransactionAmortizationModal.vue'
   import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
+  import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
+  import IncomeSettlementModal from '@/components/settlements/IncomeSettlementModal.vue'
+  import { availableAmountOf, sureMatch } from '@/lib/settlements'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
@@ -1594,6 +1597,99 @@
     selectedTransaction.value = null
   }
 
+  // Settle one open debt from the expense's list: the same single-line modal
+  // as the Remboursements page. The debt comes from `reimbursements`, loaded
+  // with its expense (`includeTransaction=true`), which the modal reads.
+  // The debt stays set after closing so the modal keeps its content while it
+  // fades out, as on the Remboursements page.
+  const settlingReimbursement = ref<ReimbursementDto | null>(null)
+  const showSettlementModal = ref(false)
+
+  function openSettlement(reimbursement: ReimbursementDto) {
+    settlingReimbursement.value =
+      reimbursements.value.find(r => r.id === reimbursement.id) ?? reimbursement
+    showSettlementModal.value = true
+  }
+
+  function closeSettlement() {
+    showSettlementModal.value = false
+  }
+
+  // Settle from the income's side: the row's « Régler {personne} » opens
+  // the modal with the sure match ticked, the hover icon and the « … » entry
+  // open it on every pending debt. Nothing is computed server-side: the
+  // ranking reads the debts already loaded and the income's own settlements.
+  const pendingReimbursements = computed(() =>
+    reimbursements.value.filter(r => r.amountRemaining > 0)
+  )
+
+  interface RowSettleState {
+    match: {
+      personId: string
+      personName: string
+      reimbursementIds: string[]
+      amount: number
+      description: string
+    } | null
+    any: boolean
+  }
+
+  /**
+   * One entry per income on the page, rebuilt only when the debts or the
+   * page change — not on every render of every row.
+   */
+  const settleStateById = computed(() => {
+    const states = new Map<string, RowSettleState>()
+    const pending = pendingReimbursements.value
+    if (pending.length === 0) return states
+    for (const tx of transactions.value) {
+      if (tx.type !== 'INCOME' || availableAmountOf(tx) <= 0) continue
+      states.set(tx.id, { match: sureMatch(pending, tx), any: true })
+    }
+    return states
+  })
+
+  function settleMatchOf(tx: TransactionDto) {
+    return settleStateById.value.get(tx.id)?.match ?? null
+  }
+
+  function settleAnyOf(tx: TransactionDto): boolean {
+    return settleStateById.value.get(tx.id)?.any ?? false
+  }
+
+  // Kept set after closing so the modal keeps its content while it fades.
+  const incomeSettlement = ref<{
+    transaction: TransactionDto
+    preselect: { personId: string; reimbursementIds: string[] } | null
+  } | null>(null)
+  const showIncomeSettlement = ref(false)
+
+  function openIncomeSettlement(tx: TransactionDto, withMatch: boolean) {
+    const match = withMatch ? settleMatchOf(tx) : null
+    incomeSettlement.value = {
+      transaction: tx,
+      preselect: match
+        ? { personId: match.personId, reimbursementIds: match.reimbursementIds }
+        : null,
+    }
+    showIncomeSettlement.value = true
+  }
+
+  function closeIncomeSettlement() {
+    showIncomeSettlement.value = false
+  }
+
+  // No optimistic update: the debt's status and the income's links are tied,
+  // and the server is the source for both.
+  async function handleSettlementCreated(settlement: SettlementDto) {
+    showSettlementModal.value = false
+    showIncomeSettlement.value = false
+    toast.success(
+      `Règlement de ${settlement.personName} enregistré (${formatCurrency(settlement.amountUsed)})`
+    )
+    await Promise.all([fetchReimbursements(), fetchTransactions()])
+  }
+
   // Delete reimbursement — asked first: one click on a 26 px cross used to
   // drop the debt for good.
   const reimbursementToDelete = ref<ReimbursementDto | null>(null)
@@ -2476,6 +2572,8 @@
               :is-editing-note="editingNoteId === tx.id"
               :reimbursements-expanded="expandedReimbursementsTxId === tx.id"
               :settlement-loading="isLoadingSettlement"
+              :settle-match="settleMatchOf(tx)"
+              :settle-any="settleAnyOf(tx)"
               @toggle-select="toggleSelection(tx.id)"
               @open-category="openCategoryModal(tx)"
               @toggle-pointed="togglePointed(tx)"
@@ -2486,6 +2584,9 @@
               @toggle-reimbursements="toggleReimbursementsExpand(tx.id)"
               @open-settlement="openSettlementDetail"
               @delete-reimbursement="handleDeleteReimbursement"
+              @settle="openSettlement"
+              @settle-match="openIncomeSettlement(tx, true)"
+              @settle-any="openIncomeSettlement(tx, false)"
               @attach-tag="id => handleAttachTag(tx, id)"
               @detach-tag="id => handleDetachTag(tx, id)"
               @create-tag="name => handleCreateTag(tx, name)"
@@ -2635,7 +2736,6 @@
       ref="reimbursementModalRef"
       :is-open="showReimbursementModal"
       :transaction="selectedTransaction"
-      :persons="personsStore.persons"
       :remaining-amount="
         selectedTransaction ? getRemainingAmount(selectedTransaction) : 0
       "
@@ -2674,6 +2774,22 @@
     <!-- Reimbursement category confirmation after a transaction category change -->
 
     <!-- Settlement detail (read-only) for income transactions -->
+    <SingleSettlementModal
+      :is-open="showSettlementModal"
+      :reimbursement="settlingReimbursement"
+      @close="closeSettlement"
+      @confirm="handleSettlementCreated"
+    />
+
+    <IncomeSettlementModal
+      :is-open="showIncomeSettlement"
+      :transaction="incomeSettlement?.transaction ?? null"
+      :pending-reimbursements="pendingReimbursements"
+      :preselect="incomeSettlement?.preselect ?? null"
+      @close="closeIncomeSettlement"
+      @confirm="handleSettlementCreated"
+    />
+
     <SettlementDetailModal
       :is-open="showSettlementDetailModal"
       :settlement="selectedSettlement"
